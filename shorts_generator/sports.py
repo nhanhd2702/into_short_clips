@@ -106,10 +106,12 @@ def render_sports_clip_916(
         "-i", source_path,
         "-filter_complex", filter_complex,
         "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
         "-preset", "faster",
         "-crf", "20",
         "-c:a", "aac",
         "-b:a", "128k",
+        "-movflags", "+faststart",
         "-threads", "0",
         out_path
     ]

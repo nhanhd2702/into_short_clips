@@ -110,14 +110,16 @@ def _reframe_vertical(in_path: str, out_path: str, aspect_ratio: str) -> str:
     import gc, time
     gc.collect()
 
-    # Mux audio from the cut clip back onto the silent reframed video.
+    # Mux audio from the cut clip back onto the silent reframed video,
+    # re-encoding video to standard H.264 (avc1) + yuv420p for universal player compatibility.
     cmd = [
         "ffmpeg", "-y", "-loglevel", "error",
         "-i", silent_path,
         "-i", in_path,
-        "-c:v", "copy",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast", "-crf", "20",
         "-c:a", "aac", "-b:a", "128k",
         "-map", "0:v:0", "-map", "1:a:0?",
+        "-movflags", "+faststart",
         "-shortest",
         out_path,
     ]
