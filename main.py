@@ -45,6 +45,12 @@ def main() -> int:
     parser.add_argument("--format", default="720", help="Source download resolution if YouTube URL (default: 720)")
     parser.add_argument("--language", default=None, help="Force Whisper language code, e.g. 'vi', 'en' (default: auto-detect)")
     parser.add_argument("--output-dir", default=None, help="Custom output directory for generated clips")
+    parser.add_argument(
+        "--crop-style",
+        choices=["blur", "face"],
+        default="blur",
+        help="9:16 reframe style: 'blur' (Professional 1080x1920 Pillarbox Blur, default) or 'face' (OpenCV face-tracking crop).",
+    )
     parser.add_argument("--output-json", default=None, help="Write the full result JSON to this path")
     args = parser.parse_args()
 
@@ -74,6 +80,7 @@ def main() -> int:
                 language=args.language,
                 mode=args.mode,
                 out_dir=args.output_dir,
+                crop_style=args.crop_style,
             )
         except Exception as e:
             print(f"\nFAILED in speech mode: {e}", file=sys.stderr)
@@ -90,6 +97,7 @@ def main() -> int:
                 language=args.language,
                 mode=args.mode,
                 out_dir=args.output_dir,
+                crop_style=args.crop_style,
             )
         except Exception as e:
             err_msg = str(e)

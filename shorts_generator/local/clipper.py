@@ -147,14 +147,54 @@ def _safe_remove(path: str, retries: int = 6, delay: float = 0.5):
         pass
 
 
+def render_pillarbox_blur_916(
+    source_path: str,
+    start_time: float,
+    end_time: float,
+    out_path: str,
+    width: int = 1080,
+    height: int = 1920,
+) -> str:
+    """Render a vertical 9:16 (1080x1920) clip with professional aesthetic pillarbox blur."""
+    duration = max(1.0, end_time - start_time)
+    filter_complex = (
+        f"[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},"
+        f"boxblur=30:10,eq=brightness=-0.05:contrast=0.95[bg];"
+        f"[0:v]scale={width}:-2[fg];"
+        f"[bg][fg]overlay=0:(H-h)/2"
+    )
+    cmd = [
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-ss", f"{start_time:.3f}",
+        "-t", f"{duration:.3f}",
+        "-i", source_path,
+        "-filter_complex", filter_complex,
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        "-preset", "faster",
+        "-crf", "20",
+        "-c:a", "aac",
+        "-b:a", "128k",
+        "-movflags", "+faststart",
+        "-threads", "0",
+        out_path,
+    ]
+    subprocess.run(cmd, check=True)
+    return out_path
+
+
 def crop_clip_local(
     source_path: str,
     start_time: float,
     end_time: float,
     aspect_ratio: str,
     out_path: str,
+    crop_style: str = "blur",
 ) -> str:
     """Cut + reframe one highlight, returning the local mp4 path."""
+    if aspect_ratio == "9:16" and crop_style == "blur":
+        return render_pillarbox_blur_916(source_path, start_time, end_time, out_path)
+
     cut_path = out_path + ".cut.mp4"
     try:
         _cut_subclip(source_path, start_time, end_time, cut_path)
@@ -169,13 +209,16 @@ def crop_highlights_local(
     highlights: List[Dict],
     aspect_ratio: str = "9:16",
     out_dir: Optional[str] = None,
+    crop_style: str = "blur",
 ) -> List[Dict]:
     out_dir = out_dir or LOCAL_OUTPUT_DIR
     os.makedirs(out_dir, exist_ok=True)
     results: List[Dict] = []
     for i, h in enumerate(highlights, 1):
-        out_path = os.path.join(out_dir, f"short_{i:02d}.mp4")
-        print(f"[clip/local] {i}/{len(highlights)}: {h.get('title', '(untitled)')}", flush=True)
+        out_name = f"short_{i:02d}.mp4"
+        out_path = os.path.join(out_dir, out_name)
+        dur = float(h.get("end_time", 0)) - float(h.get("start_time", 0))
+        print(f"[clip/local] {i}/{len(highlights)}: {h.get('title', '(untitled)')} ({dur:.1f}s) [style={crop_style}]", flush=True)
         try:
             crop_clip_local(
                 source_path,
@@ -183,6 +226,7 @@ def crop_highlights_local(
                 float(h["end_time"]),
                 aspect_ratio,
                 out_path,
+                crop_style=crop_style,
             )
             results.append({**h, "clip_url": out_path})
         except Exception as e:
