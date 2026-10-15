@@ -1,313 +1,142 @@
-# AI YouTube Shorts Generator
+# Universal AI Shorts & Reels Generator 🎬⚡
+> **Tự động cắt video dài thành Shorts / TikTok / Reels chuẩn dọc 9:16 — Hoàn toàn Miễn phí, 100% Chạy Offline (Không tốn tiền API, Không dính Watermark)**
 
-[![Powered by MuAPI](https://img.shields.io/badge/Powered%20by-MuAPI-6366f1?style=flat-square&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xMiAyQzYuNDggMiAyIDYuNDggMiAxMnM0LjQ4IDEwIDEwIDEwIDEwLTQuNDggMTAtMTBTMTcuNTIgMiAxMiAyem0tMSAxNHYtNGgtMnYtMmg0djZoLTJ6bTAtOFY2aDJ2MmgtMnoiLz48L3N2Zz4=)](https://muapi.ai?utm_source=github&utm_medium=badge&utm_campaign=ai-youtube-shorts-generator)
-
-
-**The open-source alternative to Opus Clip, Vidyo.ai, Klap, SubMagic, 2short.ai, and other AI clipping tools.** Drop in any long-form YouTube video and get back ranked, viral-ready 9:16 shorts — for free, with no per-clip credits, no watermarks, and full control over the highlight algorithm.
-
-Built for creators, agencies, and developers who don't want to pay $20–$300/month or be capped on minutes processed. Uses GPT-class LLM highlight detection and Whisper transcription to extract the most viral-worthy moments and auto-crop them vertically for TikTok, Reels, and Shorts.
-
-<p align="center"><a href="https://www.youtube.com/watch?v=Bj-iwmMl-cc"><img src="https://i.ytimg.com/vi/Bj-iwmMl-cc/maxresdefault.jpg" width="720"></a></p>
-<p align="center"><a href="https://www.youtube.com/watch?v=Bj-iwmMl-cc"><b>▶  Watch: Free Uncensored AI Generator : Open Source, No Restrictions </b></a></p>
-
-> **Building your own Opus Clip–style SaaS?** Skip the infra and ship on the same APIs that power this repo:
-> - [AI Clipping API](https://muapi.ai/playground/ai-clipping?utm_source=github&utm_medium=readme&utm_campaign=ai-youtube-shorts-generator) — end-to-end clip selection + render
-> - [Auto-Crop API](https://muapi.ai/playground/autocrop?utm_source=github&utm_medium=readme&utm_campaign=ai-youtube-shorts-generator) — vertical reframing only
-
-![longshorts](https://github.com/user-attachments/assets/3f5d1abf-bf3b-475f-8abf-5e253003453a)
-
-<p align="center">
-  <a href="https://github.com/Anil-matcha/awesome-generative-ai-apps">
-    <img src="https://img.shields.io/badge/Part%20of-Awesome%20Generative%20AI%20Apps-FFD700?style=for-the-badge&logo=github&logoColor=black" alt="Awesome Generative AI Apps">
-  </a>
-</p>
-
-> 🎨 **[Explore 50+ more open-source AI apps →](https://github.com/Anil-matcha/awesome-generative-ai-apps)**
-
-## Why Use This Instead of Opus Clip / Vidyo.ai / Klap?
-
-| | This repo | Opus Clip / Vidyo.ai / Klap / SubMagic |
-|---|---|---|
-| **Price** | Free + open source (pay only for API usage) | $20–$300/month subscriptions |
-| **Per-clip credits** | None — process unlimited videos | Monthly minute caps, overage fees |
-| **Watermarks** | Never | On free tiers |
-| **Highlight algorithm** | Fully editable virality framework | Black box |
-| **Output format** | Any aspect ratio, any resolution | Locked presets |
-| **Batch processing** | `xargs` an entire URL list | Manual upload one-by-one |
-| **JSON / API output** | Built-in (`--output-json`) | Limited or paid tier only |
-| **Self-hostable** | Yes — runs on your machine or server | SaaS only, your videos sit on their servers |
-| **White-label / embeddable** | Yes — MIT licensed, import as Python lib | No |
-
-## Features
-
-- **🎬 YouTube In, Vertical Out**: Hand it any YouTube URL — get back N viral-ready 9:16 mp4s
-- **🔀 Two Modes — API (fast) or Local (offline)**: Default `--mode api` uses MuAPI for download/transcription/cropping; `--mode local` runs entirely on your machine with `yt-dlp`, `faster-whisper`, and `ffmpeg`/`opencv`, and lets you pick OpenAI or Gemini for highlight ranking
-- **🤖 Virality-Aware Highlight Selection**: Clips ranked on hooks, emotional peaks, opinion bombs, revelation moments, conflict, quotable lines, story peaks, and practical value — not just generic "interesting"
-- **📈 Score + Hook + Reason for Every Clip**: Each highlight comes with a viral score, an opening hook line, and a one-sentence explanation of why it works
-- **🎤 Whisper Transcription, Your Choice**: Cloud (`/openai-whisper` via MuAPI) or local (`faster-whisper`, CPU or CUDA) — same downstream output shape
-- **🧩 Long-Video Aware**: Videos over 30 minutes are auto-chunked with overlap so nothing gets missed
-- **♻️ Smart Dedupe**: Overlapping highlights are collapsed by score so you never get two near-duplicate clips
-- **🎯 Smart Vertical Crop**: API mode uses MuAPI's auto-crop; local mode runs OpenCV face tracking with motion smoothing
-- **📱 Any Aspect Ratio**: 9:16 for TikTok/Reels/Shorts, 1:1 for square, anything else by flag
-- **🧰 CLI + Python Library**: Use it from the shell or import `generate_shorts(...)` into your own pipeline
-- **📦 JSON Output**: `--output-json` dumps the full result (transcript + every candidate highlight + final clip URLs/paths) for downstream automation
-
-## Quick Start (No Setup)
-
-Don't want to self-host? The [AI Clipping API](https://muapi.ai/playground/ai-clipping?utm_source=github&utm_medium=readme&utm_campaign=ai-youtube-shorts-generator) gives you the same Opus Clip–style pipeline as a single HTTP call — no Python, no dependencies, pay-per-clip instead of monthly subscriptions.
+Mã nguồn mở thay thế hoàn hảo cho **Opus Clip, Vidyo.ai, Klap, SubMagic** với khả năng xử lý cả **Video Trò chuyện (Speech/Podcasts)** lẫn **Video Thể thao / Hành động (Sports/Action/Gaming)**.
 
 ---
 
-## Installation (Self-Hosted)
+## ✨ Điểm Nổi Bật (Key Features)
 
-### Prerequisites
+- 🎙️ **Chế độ Lời thoại (Speech Mode):** Tự động bóc tách phụ đề bằng `faster-whisper` (tiếng Việt & đa ngôn ngữ), dùng mô hình ngôn ngữ (Ollama `qwen2.5:3b` hoặc Gemini API) phân tích các đoạn mở đầu (hook) kịch tính, tự động bám mặt người nói để crop dọc 9:16.
+- 🏸 **Chế độ Thể thao (Sports Mode):** Quét phân tích biểu đồ năng lượng âm thanh (Audio Peak Energy) để tóm gọn các pha cầu giằng co, cú smash, bàn thắng hoặc tiếng reo hò của khán giả. Sử dụng bố cục **Pillarbox Blur 9:16** chuyên nghiệp (toàn cảnh sân đấu ở giữa, nền mờ thẩm mỹ phía trên dưới).
+- 🤖 **Chế độ Tự động (Auto Mode):** Tự động kiểm tra giọng nói trong video; nếu không có lời thoại (như trận đấu thể thao), hệ thống tự chuyển sang chế độ phân tích âm thanh cao trào.
+- 💻 **100% Offline & Riêng tư:** Chạy hoàn toàn trên máy tính cá nhân bằng CPU/GPU nội bộ, không tải video lên đám mây, không giới hạn số lượng video.
+- 🚀 **Cài đặt & Chạy 1-Click:** Có sẵn các script tự động `setup.bat`, `run.bat` cho Windows và hỗ trợ cả Docker.
 
-- Python 3.10+
-- For **API mode (default)**: a MuAPI key — powers download, transcription, highlight ranking, and clipping in a single dependency
-- For **Local mode** (`--mode local`): `ffmpeg` on your PATH and an LLM API key (`OPENAI_API_KEY` or `GEMINI_API_KEY`; only the LLM step is remote)
+---
 
-### Steps
+## 🚀 Cài Đặt Nhanh (1-Click Setup)
 
-1. **Clone the repository:**
+### Cách 1: Chạy trực tiếp trên Windows (Khuyên dùng)
+
+1. Tải hoặc clone repository về máy:
    ```bash
-   git clone https://github.com/SamurAIGPT/AI-Youtube-Shorts-Generator.git
+   git clone https://github.com/Anil-matcha/AI-Youtube-Shorts-Generator.git
    cd AI-Youtube-Shorts-Generator
    ```
 
-2. **Create and activate a virtual environment:**
-   ```bash
-   python3.10 -m venv venv
-   source venv/bin/activate
-   ```
+2. Chạy file cài đặt tự động:
+   * **Cách đơn giản:** Nhấp đúp chuột vào file **`setup.bat`** (hoặc mở PowerShell gõ `.\setup.ps1`).
+   * Script sẽ tự động:
+     - Tạo môi trường ảo Python `.venv`.
+     - Cài đặt toàn bộ thư viện AI cần thiết.
+     - Tải Ollama Portable và kéo mô hình `qwen2.5:3b` về máy để chạy offline.
+     - Tạo file cấu hình `.env` mặc định.
 
-3. **Install Python dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   # Only if you plan to use --mode local:
-   pip install -r requirements-local.txt
-   ```
+### Cách 2: Chạy bằng Docker
+```bash
+docker compose build
+```
 
-4. **Set up environment variables:**
+---
 
-   Create a `.env` file in the project root:
-   ```bash
-   # API mode (default)
-   MUAPI_API_KEY=your_muapi_key_here
+## 🎯 Hướng Dẫn Sử Dụng (Quick Start)
 
-   # Local mode (--mode local)
-   LLM_PROVIDER=openai         # openai or gemini
-   OPENAI_API_KEY=your_openai_key_here
-   OPENAI_MODEL=gpt-4o-mini          # optional, default gpt-4o-mini
-   GEMINI_API_KEY=your_gemini_key_here
-   GEMINI_MODEL=gemini-2.5-flash      # optional, default gemini-2.5-flash
-   LOCAL_WHISPER_MODEL=base          # tiny / base / small / medium / large-v3
-   LOCAL_WHISPER_DEVICE=auto         # auto / cpu / cuda
-   LOCAL_OUTPUT_DIR=output           # where local mp4s land
-   ```
+### 1. Dùng Script tiện ích 1-Click (`run.bat` / `run.ps1`)
 
-## Usage
+* **Cắt video trò chuyện / Podcast (Theo lời thoại):**
+  ```powershell
+  .\run.ps1 "D:\Videos\podcast.mp4" 3 "speech"
+  ```
+* **Cắt video Thể thao / Cầu lông / Bóng đá (Theo âm lượng hò reo & đập cầu):**
+  ```powershell
+  .\run.ps1 "D:\Videos\badminton_match.mov" 10 "sports" "9:16" 45
+  ```
+* **Chế độ Tự động nhận diện (Mặc định):**
+  ```powershell
+  .\run.ps1 "D:\Videos\any_video.mp4" 3
+  ```
+*(Nếu dùng Command Prompt CMD, gõ tương tự: `run.bat "video.mp4" 3 auto`)*
 
-### Single video (API mode — default)
+---
+
+### 2. Dùng dòng lệnh Python chi tiết
 
 ```bash
-python main.py "https://www.youtube.com/watch?v=VIDEO_ID"
+# Cắt 3 clip từ link YouTube hoặc file local:
+.\.venv\Scripts\python.exe main.py "https://www.youtube.com/watch?v=VIDEO_ID" --num-clips 3
+
+# Cắt 10 clip thể thao độ dài 45s mỗi clip:
+.\.venv\Scripts\python.exe main.py "D:\Videos\match.mp4" --type sports --num-clips 10 --duration 45
+
+# Cắt video trò chuyện ép ngôn ngữ tiếng Việt:
+.\.venv\Scripts\python.exe main.py "talkshow.mp4" --type speech --language vi --num-clips 5
 ```
 
-### Single video (Local mode — runs offline except for the LLM call)
+---
 
-```bash
-python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --mode local
+## ⚙️ Tùy Chọn Cấu Hình (`.env`)
+
+Mở file `.env` để tùy biến theo nhu cầu:
+
+```env
+# 1. Chọn nguồn trí tuệ nhân tạo:
+#    - "ollama": Chạy 100% Offline trên máy (Mặc định, không cần key)
+#    - "gemini": Dùng Google Gemini API (Miễn phí hạn mức lớn, siêu nhanh)
+#    - "openai": Dùng OpenAI API
+LLM_PROVIDER=ollama
+
+# Cấu hình Ollama Offline:
+OLLAMA_BASE_URL=http://localhost:11434/v1
+OLLAMA_MODEL=qwen2.5:3b
+
+# Cấu hình Gemini Cloud (tùy chọn):
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-2.5-flash
+
+# Cấu hình Whisper:
+LOCAL_WHISPER_MODEL=base
+LOCAL_WHISPER_DEVICE=cpu
+
+# Thư mục lưu kết quả:
+LOCAL_OUTPUT_DIR=output
 ```
 
-Local mode writes the rendered shorts to `./output/short_01.mp4`, `short_02.mp4`, … (override with `LOCAL_OUTPUT_DIR`).
+---
 
-### With options
-
-```bash
-python main.py "https://www.youtube.com/watch?v=VIDEO_ID" \
-    --mode api \
-    --num-clips 5 \
-    --aspect-ratio 9:16 \
-    --output-json result.json
-```
-
-### Local file or path
-
-In `--mode local`, you can pass a `file://` URL or a direct filesystem path and skip YouTube entirely:
-
-```bash
-python main.py "/Users/you/Videos/input.mp4" --mode local
-python main.py "file:///Users/you/Videos/input.mp4" --mode local
-```
-
-The Python API works the same way:
-
-```python
-from shorts_generator import generate_shorts
-
-result = generate_shorts(
-    "/Users/you/Videos/input.mp4",
-    num_clips=5,
-    aspect_ratio="9:16",
-    mode="local",
-)
-for short in result["shorts"]:
-    print(short["score"], short["title"], short["clip_url"])
-```
-
-Local transcription is cached as an `.srt` file in `LOCAL_OUTPUT_DIR` using the
-video's base name. If the cache already exists and is newer than the source
-file, the app reuses it instead of running Whisper again.
-
-Local downloads are also cached in `LOCAL_OUTPUT_DIR` as
-`source_<youtube_id>.mp4` when the input is a YouTube URL. If that file already
-exists, the app skips `yt-dlp` and reuses the cached video.
-
-### Batch processing
-
-Create a `urls.txt` file with one URL per line, then:
-
-```bash
-xargs -a urls.txt -I{} python main.py "{}"
-```
-
-### CLI flags
-
-| Flag | Default | Notes |
-|------|---------|-------|
-| `--mode` | `api` | `api` (MuAPI, fast, no setup) or `local` (remote URL, `file://`, or local path + faster-whisper + LLM provider + ffmpeg) |
-| `--num-clips` | `3` | How many shorts to render |
-| `--aspect-ratio` | `9:16` | Any ratio; `9:16` for TikTok/Reels, `1:1` for square |
-| `--format` | `720` | Source download resolution: `360` / `480` / `720` / `1080` |
-| `--language` | auto | Force Whisper language code (e.g. `en`) |
-| `--output-json` | — | Dump the full result (transcript + all candidates) to a file |
-
-### API mode vs Local mode
-
-| Step | API mode (`--mode api`) | Local mode (`--mode local`) |
-|---|---|---|
-| Download | MuAPI `/youtube-download` | `yt-dlp` for remote URLs, direct file path for local inputs |
-| Transcription | MuAPI `/openai-whisper` | `faster-whisper` (CPU or CUDA) |
-| Highlight LLM | MuAPI `gpt-5-mini` | `LLM_PROVIDER=openai` uses OpenAI (`gpt-4o-mini` by default), `LLM_PROVIDER=gemini` uses Gemini (`gemini-2.5-flash` by default) |
-| Vertical crop | MuAPI `/autocrop` | `ffmpeg` + OpenCV face tracking |
-| Output | hosted URLs | local mp4 paths |
-| Required keys | `MUAPI_API_KEY` | `OPENAI_API_KEY` or `GEMINI_API_KEY` (+ `ffmpeg` on PATH) |
-
-## How It Works
-
-1. **Download**: Fetches the source video from YouTube
-2. **Transcribe**: MuAPI `/openai-whisper` produces a timestamped transcript (verbose_json segments)
-3. **Detect content type**: An LLM classifies the video (podcast, interview, tutorial, vlog, etc.) and density, so the prompt can be tuned per content style
-4. **Long-video chunking**: Videos > 30 min are split into 20-min overlapping chunks
-5. **Highlight ranking**: An LLM scans the transcript through a virality framework — hook moments, emotional peaks, opinion bombs, revelations, conflict, quotables, story peaks, practical value — and emits ranked candidates with scores 0–100
-6. **Dedupe**: Overlapping candidates are collapsed by score (>50% overlap → keep the higher score)
-7. **Top-N selection**: The top `--num-clips` candidates are selected
-8. **Auto-crop**: Each highlight is rendered as a vertical short at the requested aspect ratio
-
-**Output**: a list of mp4 URLs plus, for each clip, its title, viral score, hook sentence, and a one-line reason explaining why it should perform.
-
-## Output
-
-Console output looks like:
-
-```
-========================================================================
-Highlights:    7 candidates → kept top 3
-========================================================================
-
-#1  score=92  124.3s → 187.6s
-     title:  The one mistake that cost me $50K
-     hook:   "Nobody talks about this, but it killed my first startup..."
-     clip:   https://.../short_1.mp4
-
-#2  score=88  ...
-```
-
-`--output-json result.json` produces:
-
-```json
-{
-  "source_video_url": "...",
-  "transcript": { "duration": 1873.4, "segments": [...] },
-  "highlights": [ {...}, {...}, ... ],
-  "shorts": [
-    {
-      "title": "...",
-      "start_time": 124.3,
-      "end_time": 187.6,
-      "score": 92,
-      "hook_sentence": "...",
-      "virality_reason": "...",
-      "clip_url": "https://.../short_1.mp4"
-    }
-  ]
-}
-```
-
-## Configuration
-
-### Highlight selection criteria
-Edit `shorts_generator/highlights.py`:
-- **Virality framework**: `VIRALITY_CRITERIA` — the ranked list of signals the LLM optimizes for
-- **System prompt**: `HIGHLIGHT_SYSTEM_PROMPT` — duration sweet spot, hook rules, JSON schema
-- **Chunk size**: `CHUNK_SIZE_SECONDS` (default 1200) — chunk length for long videos
-- **Long-video threshold**: `LONG_VIDEO_THRESHOLD` (default 1800) — videos longer than this are chunked
-- **Chunk overlap**: `CHUNK_OVERLAP_SECONDS` (default 60) — overlap between chunks so cross-boundary clips aren't missed
-
-### Polling / timeout
-Edit `shorts_generator/config.py` (or set env vars):
-- `MUAPI_POLL_INTERVAL` (default 5s) — seconds between job-status polls
-- `MUAPI_POLL_TIMEOUT` (default 1800s) — give up after this long
-
-### Whisper transcription
-Audio is transcribed by MuAPI's `/openai-whisper` endpoint (server-side `whisper-1`). Pass `--language <code>` to lock the recognition to a specific language; otherwise it auto-detects.
-
-## Project Structure
+## 📂 Cấu Trúc Thư Mục Dự Án
 
 ```
 AI-Youtube-Shorts-Generator/
-├── main.py                       CLI entry point
-├── requirements.txt              core deps (api mode)
-├── requirements-local.txt        optional deps for --mode local
-├── .env.example
-└── shorts_generator/
-    ├── config.py                 env / settings (MuAPI + local LLM + Whisper)
-    ├── muapi.py                  generic submit + poll wrapper
-    ├── downloader.py             API mode: YouTube download via MuAPI
-    ├── transcriber.py            API mode: MuAPI /openai-whisper client
-    ├── highlights.py             shared LLM virality ranking (pluggable backend)
-    ├── clipper.py                API mode: MuAPI /autocrop
-    ├── pipeline.py               mode dispatcher (api ↔ local)
-    └── local/                    --mode local backends (offline)
-        ├── downloader.py         yt-dlp download
-        ├── transcriber.py        faster-whisper transcription
-        ├── llm.py                OpenAI or Gemini client selector
-        └── clipper.py            ffmpeg cut + OpenCV vertical crop
+├── shorts_generator/          # Nhân mã nguồn chính của AI Pipeline
+│   ├── sports.py             # Engine bóc tách highlight thể thao (Audio Energy Peaks)
+│   ├── pipeline.py           # Engine điều phối chung
+│   ├── highlights.py         # Prompt LLM phân tích virality & hooks
+│   └── local/
+│       ├── transcriber.py    # Phiên âm nhanh qua faster-whisper (CPU int8)
+│       ├── clipper.py        # Cắt clip & bám mặt người nói qua OpenCV
+│       └── llm.py            # Kết nối Ollama, Gemini, OpenAI
+├── main.py                   # Điểm khởi chạy CLI chính
+├── setup.bat / setup.ps1     # Script cài đặt môi trường 1-click
+├── run.bat / run.ps1         # Script chạy cắt Shorts 1-click
+├── requirements-local.txt    # Danh sách thư viện đã được kiểm thử ổn định
+├── Dockerfile                # File đóng gói Docker
+├── docker-compose.yml        # Cấu hình khởi chạy qua Docker
+└── output/                   # Thư mục chứa các video Shorts xuất ra
 ```
 
-## Troubleshooting
+---
 
-### Whisper produced no segments
-The video may have no detectable speech, or it may be in a language Whisper struggles with. Try passing `--language en` (or the correct ISO-639-1 code) to skip auto-detection.
+## 🛠️ Khắc Phục Lỗi Thường Gặp (Troubleshooting)
 
-### Looking for better results?
-The [AI Clipping API](https://muapi.ai/playground/ai-clipping?utm_source=github&utm_medium=readme&utm_campaign=ai-youtube-shorts-generator) uses an improved algorithm that produces higher-quality clips with better highlight detection.
+1. **Lỗi `av` hoặc `ffmpeg`:**  
+   Kho dữ liệu đã được ghim phiên bản `av<14` và `opencv-python<5` để đảm bảo độ tương thích 100% với Windows.
+2. **Lỗi Windows File Lock:**  
+   Hệ thống đã tích hợp cơ chế tự động giải phóng bộ nhớ `gc.collect()` và retry an toàn khi xóa file tạm.
+3. **Mô hình AI trên máy không có GPU rời:**  
+   Hệ thống được tối ưu hóa đặc biệt để chạy mượt mà ngay trên **CPU thông thường (Intel Core i5/i7) với 8GB-16GB RAM** thông qua `faster-whisper-base (int8)` và mô hình `qwen2.5:3b`.
 
-## Contributing
+---
 
-Contributions are welcome! Please fork the repository and submit a pull request.
-
-## License
-
-This project is licensed under the MIT License.
-
-## Related Projects
-
-- [awesome-vibecoded-saas](https://github.com/Anil-matcha/awesome-vibecoded-saas) — broader catalog of open-source SaaS alternatives featuring this Shorts workflow.
-- [Muapi open-source alternatives](https://muapi.ai/open-source/alternative) — compare the Shorts workflow with the paid creator tools it targets.
-- [AI Influencer Generator](https://github.com/SamurAIGPT/AI-Influencer-Generator)
-- [Text to Video AI](https://github.com/SamurAIGPT/Text-To-Video-AI)
-- [Faceless Video Generator](https://github.com/SamurAIGPT/Faceless-Video-Generator)
-- [AI B-roll Generator](https://github.com/Anil-matcha/AI-B-roll)
-- [No-code YouTube Shorts Generator](https://www.vadoo.tv/clip-youtube-video)
-- [ai-creator-academy](https://github.com/Anil-matcha/ai-creator-academy) — free curriculum teaching creators how to monetize AI-generated shorts and video content
+## 📜 Giấy Phép (License)
+Dự án được phân phối dưới giấy phép **MIT License**. Bạn có thể tự do sử dụng, chỉnh sửa và tích hợp vào các dự án thương mại hoặc cá nhân.

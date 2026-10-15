@@ -49,7 +49,7 @@ Your task: identify the most viral-worthy highlights from the transcript.
 
 Rules:
 - Every highlight must open with a strong HOOK — a line that grabs attention within the first 3 seconds
-- Duration sweet spot: 45-90 seconds. Go shorter (20-44s) only for a perfect standalone one-liner. Go longer (91-180s) only when a story arc needs full context to land
+- Duration sweet spot: 50-70 seconds (target ~60 seconds). Each clip should deliver a cohesive, meaningful story or insight.
 - Never cut mid-sentence or mid-thought — each clip must feel complete and self-contained
 - Clips must not overlap significantly with each other
 - Score 0-100 on viral potential (not general quality)
@@ -61,9 +61,9 @@ Respond ONLY with valid JSON (no markdown, no explanation):
 {{"highlights":[{{"title":"string","start_time":float,"end_time":float,"score":int,"hook_sentence":"string","virality_reason":"string"}}]}}"""
 
 
-CHUNK_SIZE_SECONDS = 1200       # 20-min chunks for long videos
-LONG_VIDEO_THRESHOLD = 1800     # chunk videos longer than 30 min
-CHUNK_OVERLAP_SECONDS = 60
+CHUNK_SIZE_SECONDS = 420       # 7-min chunks to fit local LLM context comfortably
+LONG_VIDEO_THRESHOLD = 500     # chunk videos longer than ~8 min
+CHUNK_OVERLAP_SECONDS = 45
 GPT_CALL_TIMEOUT_SECONDS = 300  # cap LLM polls at 5 min — a wedged call should fail fast
 MAX_HIGHLIGHT_API_ATTEMPTS = 3
 
@@ -140,6 +140,10 @@ def _sanitize_highlights(raw_highlights: object, duration: float) -> List[Dict]:
         if start < 0 or end <= start:
             continue
 
+        # If clip is too short, extend it to ~60s for a complete story
+        if end - start < 45.0:
+            end = start + 60.0
+
         if max_end != float("inf"):
             start = min(start, max_end)
             end = min(end, max_end)
@@ -205,16 +209,19 @@ def call_highlight_api(
     is_chunk: bool = False,
     llm_fn: LLMFn = call_muapi_llm,
 ) -> Dict:
-    # Ask for ~2× the user's target so dedupe has headroom, but cap so the model
-    # doesn't have to generate a huge JSON payload (which times out gpt-5-mini).
-    target = max(num_clips * 2, 5)
-    natural_max = max(2 if is_chunk else 3, int(duration / 90))
-    min_clips = min(target, natural_max, 8)
+    if is_chunk:
+        num_instruction = "Generate 1 or 2 of the most viral highlights from this section"
+    else:
+        target = max(num_clips * 2, 5)
+        natural_max = max(3, int(duration / 90))
+        min_clips = min(target, natural_max, 8)
+        num_instruction = f"Generate at least {min_clips} highlights"
+
     system = HIGHLIGHT_SYSTEM_PROMPT.format(
         virality_criteria=VIRALITY_CRITERIA,
         content_type=content_info.get("content_type", "other"),
         density=content_info.get("density", "medium"),
-        num_clips_instruction=f"Generate at least {min_clips} highlights",
+        num_clips_instruction=num_instruction,
     )
     base_prompt = f"{system}\n\nTranscript:\n{transcript_text}"
     prompt = base_prompt
@@ -224,12 +231,17 @@ def call_highlight_api(
         raw = llm_fn(prompt)
         try:
             parsed = _parse_json_loose(raw)
-            highlights = _sanitize_highlights(parsed.get("highlights"), duration=duration)
+            raw_h = None
+            if isinstance(parsed, list):
+                raw_h = parsed
+            elif isinstance(parsed, dict):
+                raw_h = parsed.get("highlights") or parsed.get("clips") or parsed.get("data") or parsed.get("results")
+            highlights = _sanitize_highlights(raw_h, duration=duration)
             if highlights:
                 return {"highlights": highlights}
-            last_error = "no valid highlights in response"
+            last_error = f"no valid highlights in response: {raw[:150]}"
         except Exception as e:
-            last_error = str(e)
+            last_error = f"{e} (raw: {raw[:150]})"
 
         if attempt < MAX_HIGHLIGHT_API_ATTEMPTS:
             print(
@@ -292,11 +304,18 @@ def get_highlights(
             offset = chunk.get("_offset", 0)
             text = build_transcript_text(chunk)
             print(f"[highlights] chunk {i + 1}/{len(chunks)} (offset {offset:.0f}s)", flush=True)
-            result = call_highlight_api(text, content_info, chunk["duration"], num_clips=num_clips, is_chunk=True, llm_fn=llm_fn)
-            for h in result.get("highlights", []):
-                h["start_time"] = float(h["start_time"]) + offset
-                h["end_time"] = float(h["end_time"]) + offset
-                all_highlights.append(h)
+            try:
+                result = call_highlight_api(text, content_info, duration, num_clips=num_clips, is_chunk=True, llm_fn=llm_fn)
+                for h in result.get("highlights", []):
+                    if float(h["start_time"]) < offset:
+                        h["start_time"] = float(h["start_time"]) + offset
+                        h["end_time"] = float(h["end_time"]) + offset
+                    all_highlights.append(h)
+            except Exception as e:
+                print(f"[highlights] Warning: chunk {i + 1} failed ({e}); continuing with next chunks...", flush=True)
+
+        if not all_highlights:
+            raise RuntimeError("Highlight generator produced zero highlights across all chunks.")
         highlights = dedupe_highlights(all_highlights)
     else:
         text = build_transcript_text(transcript)

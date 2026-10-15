@@ -4,5 +4,12 @@ __pycache__/
 .venv/
 venv/
 output/
+input/
+ollama_bin/
 *.mp4
+*.wav
+*.srt
+*.log
+*.jpg
+*.png
 .DS_Store

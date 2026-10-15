@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  shorts-generator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ai-youtube-shorts-generator:latest
+    container_name: shorts_generator
+    env_file:
+      - .env
+    volumes:
+      - ./input:/app/input
+      - ./output:/app/output
+    # Cho phép container kết nối tới Ollama đang chạy trên máy Host qua host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Giữ container chạy hoặc truyền lệnh trực tiếp
+    stdin_open: true
+    tty: true

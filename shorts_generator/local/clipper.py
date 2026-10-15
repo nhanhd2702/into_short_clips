@@ -104,7 +104,11 @@ def _reframe_vertical(in_path: str, out_path: str, aspect_ratio: str) -> str:
         writer.write(cropped)
 
     cap.release()
+    del cap
     writer.release()
+    del writer
+    import gc, time
+    gc.collect()
 
     # Mux audio from the cut clip back onto the silent reframed video.
     cmd = [
@@ -118,8 +122,27 @@ def _reframe_vertical(in_path: str, out_path: str, aspect_ratio: str) -> str:
         out_path,
     ]
     subprocess.run(cmd, check=True)
-    os.remove(silent_path)
+    _safe_remove(silent_path)
     return out_path
+
+
+def _safe_remove(path: str, retries: int = 6, delay: float = 0.5):
+    """Safely delete temporary file handling Windows transient file locks."""
+    import gc, time
+    if not os.path.exists(path):
+        return
+    gc.collect()
+    for _ in range(retries):
+        try:
+            os.remove(path)
+            return
+        except (PermissionError, OSError):
+            time.sleep(delay)
+            gc.collect()
+    try:
+        os.remove(path)
+    except Exception:
+        pass
 
 
 def crop_clip_local(
@@ -135,8 +158,7 @@ def crop_clip_local(
         _cut_subclip(source_path, start_time, end_time, cut_path)
         _reframe_vertical(cut_path, out_path, aspect_ratio)
     finally:
-        if os.path.exists(cut_path):
-            os.remove(cut_path)
+        _safe_remove(cut_path)
     return out_path
 
 
