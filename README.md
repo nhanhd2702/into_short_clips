@@ -1,88 +1,161 @@
-# Universal AI Shorts & Reels Generator 🎬⚡
-> **Tự động cắt video dài thành Shorts / TikTok / Reels chuẩn dọc 9:16 — Hoàn toàn Miễn phí, 100% Chạy Offline (Không tốn tiền API, Không dính Watermark)**
+# into_short_clips 🎬⚡
+> **Universal AI Video Shorts & Reels Generator — 100% Offline, Local & Miễn Phí (Không tốn tiền API, Không dính Watermark)**
 
-Mã nguồn mở thay thế hoàn hảo cho **Opus Clip, Vidyo.ai, Klap, SubMagic** với khả năng xử lý cả **Video Trò chuyện (Speech/Podcasts)** lẫn **Video Thể thao / Hành động (Sports/Action/Gaming)**.
+[![GitHub](https://img.shields.io/badge/GitHub-into__short__clips-blue?logo=github)](https://github.com/nhanhd2702/into_short_clips)
+[![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-blue?logo=python)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-orange)]()
+[![Ollama](https://img.shields.io/badge/Ollama-qwen2.5:3b%20Offline-purple?logo=ollama)](https://ollama.com/)
+
+**into_short_clips** là giải pháp mã nguồn mở thay thế hoàn hảo cho **Opus Clip, Vidyo.ai, Klap, SubMagic**, cho phép tự động chuyển đổi các video dài (Podcasts, Talkshow, Video thể thao, Cầu lông, Bóng đá, Gaming) thành các clip ngắn **Shorts / TikTok / Reels chuẩn dọc 9:16 (Full HD 1080x1920)** hoàn toàn tự động ngay trên máy tính của bạn.
 
 ---
 
 ## ✨ Điểm Nổi Bật (Key Features)
 
-- 🎙️ **Chế độ Lời thoại (Speech Mode):** Tự động bóc tách phụ đề bằng `faster-whisper` (tiếng Việt & đa ngôn ngữ), dùng mô hình ngôn ngữ (Ollama `qwen2.5:3b` hoặc Gemini API) phân tích các đoạn mở đầu (hook) kịch tính, tự động bám mặt người nói để crop dọc 9:16.
-- 🏸 **Chế độ Thể thao (Sports Mode):** Quét phân tích biểu đồ năng lượng âm thanh (Audio Peak Energy) để tóm gọn các pha cầu giằng co, cú smash, bàn thắng hoặc tiếng reo hò của khán giả. Sử dụng bố cục **Pillarbox Blur 9:16** chuyên nghiệp (toàn cảnh sân đấu ở giữa, nền mờ thẩm mỹ phía trên dưới).
-- 🤖 **Chế độ Tự động (Auto Mode):** Tự động kiểm tra giọng nói trong video; nếu không có lời thoại (như trận đấu thể thao), hệ thống tự chuyển sang chế độ phân tích âm thanh cao trào.
-- 💻 **100% Offline & Riêng tư:** Chạy hoàn toàn trên máy tính cá nhân bằng CPU/GPU nội bộ, không tải video lên đám mây, không giới hạn số lượng video.
-- 🚀 **Cài đặt & Chạy 1-Click:** Có sẵn các script tự động `setup.bat`, `run.bat` cho Windows và hỗ trợ cả Docker.
+- 🎙️ **Chế độ Lời thoại (Speech Mode):** Tự động bóc tách phụ đề bằng `faster-whisper` (tiếng Việt & đa ngôn ngữ), dùng mô hình ngôn ngữ (Ollama `qwen2.5:3b` cục bộ hoặc Google Gemini) phân tích tìm các câu mở đầu (hook) kịch tính và các đoạn cao trào chia sẻ sâu sắc.
+- 🏸 **Chế độ Thể thao & Hành động (Sports Mode):** Quét phân tích biểu đồ năng lượng âm thanh (Audio Energy Peaks) để tóm gọn các pha cầu kịch tính, smash, bàn thắng hoặc tiếng reo hò khán giả.
+- 🤖 **Chế độ Tự động (Auto Mode):** Tự động phát hiện giọng nói trong video; nếu video không có thoại (trận đấu thể thao, highlight hành động), hệ thống tự chuyển sang chế độ quét âm lượng đỉnh.
+- 📱 **Định dạng chuẩn dọc 9:16 Full HD (1080x1920):**
+  - **Pillarbox Blur thẩm mỹ (Mặc định):** Giữ trọn 100% khung hình gốc ở giữa, hai dải trên/dưới được phủ mờ đồng điệu màu sắc (`boxblur` mượt mà). Không bao giờ bị cắt xén phụ đề hay logo.
+  - **Face Tracking Crop:** Tự động nhận diện và bám sát mặt nhân vật bằng OpenCV.
+- 🎞️ **Chuẩn nén quốc tế H.264 (AVC1) + YUV420p:** Tương thích 100% trên Windows Media Player, QuickTime (macOS), iPhone, Android, CapCut, Premiere, TikTok, Shorts.
+- 💻 **100% Offline & Bảo mật tuyệt đối:** Chạy trực tiếp trên CPU/GPU nội bộ của máy tính, không tải video lên bất kỳ server bên thứ ba nào, không giới hạn thời lượng hay số lượng video.
+- 🚀 **1-Click Setup & Run:** Tích hợp sẵn bộ công cụ chạy tức thì cho cả **Windows** (`setup.bat`, `run.bat`, `setup.ps1`, `run.ps1`) và **macOS / Linux** (`setup.sh`, `run.sh`).
 
 ---
 
-## 🚀 Cài Đặt Nhanh (1-Click Setup)
+## 🖥️ Hướng Dẫn Cài Đặt 1-Click (Setup Guide)
 
-### Cách 1: Chạy trực tiếp trên Windows (Khuyên dùng)
+Clone kho mã nguồn về máy:
+```bash
+git clone https://github.com/nhanhd2702/into_short_clips.git
+cd into_short_clips
+```
 
-1. Tải hoặc clone repository về máy:
-   ```bash
-   git clone https://github.com/Anil-matcha/AI-Youtube-Shorts-Generator.git
-   cd AI-Youtube-Shorts-Generator
-   ```
+### 1. Dành cho Windows 10 / 11
 
-2. Chạy file cài đặt tự động:
-   * **Cách đơn giản:** Nhấp đúp chuột vào file **`setup.bat`** (hoặc mở PowerShell gõ `.\setup.ps1`).
-   * Script sẽ tự động:
-     - Tạo môi trường ảo Python `.venv`.
-     - Cài đặt toàn bộ thư viện AI cần thiết.
-     - Tải Ollama Portable và kéo mô hình `qwen2.5:3b` về máy để chạy offline.
-     - Tạo file cấu hình `.env` mặc định.
+#### Cách 1: Chạy file cài đặt tự động (Khuyên dùng)
+* Nhấp đúp chuột vào file **`setup.bat`** (hoặc mở PowerShell trong thư mục dự án và gõ `.\setup.ps1`).
+* Script sẽ tự động thực hiện từ A đến Z:
+  1. Tạo môi trường ảo Python `.venv`.
+  2. Cài đặt các thư viện AI ổn định (`faster-whisper`, `opencv-python`, `av<14`, `yt-dlp`...).
+  3. Tự động kiểm tra và tải bản **FFmpeg Portable** nếu máy chưa có.
+  4. Tự động kiểm tra và tải **Ollama Portable** + tải model `qwen2.5:3b` chạy ngầm.
+  5. Tạo sẵn file `.env` chuẩn 100% Offline.
 
-### Cách 2: Chạy bằng Docker
+---
+
+### 2. Dành cho macOS (Apple Silicon M1/M2/M3/M4 & Intel)
+
+#### Bước 1: Chuẩn bị công cụ cơ bản
+Mở terminal và đảm bảo máy đã có [Homebrew](https://brew.sh) cùng Python 3.10+:
+```bash
+# Cài Homebrew nếu chưa có:
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Cài đặt FFmpeg và Ollama:
+brew install ffmpeg ollama python@3.12
+```
+
+#### Bước 2: Chạy script 1-Click Setup
+```bash
+chmod +x setup.sh run.sh
+./setup.sh
+```
+Script sẽ tự khởi tạo virtual environment `.venv`, cài đặt thư viện cần thiết, khởi động Ollama và kéo model `qwen2.5:3b`.
+
+---
+
+### 3. Dành cho Docker (Linux / Cloud Server)
 ```bash
 docker compose build
 ```
 
 ---
 
-## 🎯 Hướng Dẫn Sử Dụng (Quick Start)
+## 🎯 Hướng Dẫn Sử Dụng Nhanh (Quick Start)
 
-### 1. Dùng Script tiện ích 1-Click (`run.bat` / `run.ps1`)
+### 1. Trên Windows
 
-* **Cắt video trò chuyện / Podcast (Theo lời thoại):**
+Sử dụng tiện ích `run.bat` hoặc PowerShell `.\run.ps1`:
+
+* **Cắt video trò chuyện / Podcast (chuẩn dọc 1080x1920 Pillarbox Blur):**
   ```powershell
-  .\run.ps1 "D:\Videos\podcast.mp4" 3 "speech"
+  .\run.ps1 "D:\Videos\podcast.mp4" 3 speech
   ```
-* **Cắt video Thể thao / Cầu lông / Bóng đá (Theo âm lượng hò reo & đập cầu):**
+* **Cắt video Thể thao / Cầu lông / Bóng đá (theo năng lượng âm thanh):**
   ```powershell
-  .\run.ps1 "D:\Videos\badminton_match.mov" 10 "sports" "9:16" 45
+  .\run.ps1 "D:\Videos\badminton_match.mov" 10 sports
   ```
-* **Chế độ Tự động nhận diện (Mặc định):**
+* **Cắt video từ link YouTube trực tiếp:**
   ```powershell
-  .\run.ps1 "D:\Videos\any_video.mp4" 3
+  .\run.ps1 "https://www.youtube.com/watch?v=ZCl5AUp36GA" 5 speech
   ```
-*(Nếu dùng Command Prompt CMD, gõ tương tự: `run.bat "video.mp4" 3 auto`)*
+* **Chế độ tự động nhận diện (Speech -> Sports fallback):**
+  ```powershell
+  .\run.ps1 "video.mp4" 3
+  ```
+*(Người dùng Command Prompt CMD chỉ cần gõ tương tự: `run.bat "video.mp4" 3 speech`)*
 
 ---
 
-### 2. Dùng dòng lệnh Python chi tiết
+### 2. Trên macOS
+
+Sử dụng script `./run.sh`:
+
+* **Cắt video Podcast / Phỏng vấn:**
+  ```bash
+  ./run.sh "podcast.mp4" 3 speech
+  ```
+* **Cắt video Thể thao (10 clip, mỗi clip 45s):**
+  ```bash
+  ./run.sh "match.mov" --type sports --num-clips 10 --duration 45
+  ```
+* **Cắt trực tiếp từ link YouTube:**
+  ```bash
+  ./run.sh "https://www.youtube.com/watch?v=ZCl5AUp36GA" --num-clips 5
+  ```
+* **Chọn kiểu crop bám mặt nhân vật (Face-tracking):**
+  ```bash
+  ./run.sh "interview.mp4" --num-clips 3 --crop-style face
+  ```
+
+---
+
+### 3. Gọi trực tiếp bằng dòng lệnh Python (`main.py`)
 
 ```bash
-# Cắt 3 clip từ link YouTube hoặc file local:
-.\.venv\Scripts\python.exe main.py "https://www.youtube.com/watch?v=VIDEO_ID" --num-clips 3
+# Windows:
+.\.venv\Scripts\python.exe main.py "video.mp4" --type speech --num-clips 5 --crop-style blur
 
-# Cắt 10 clip thể thao độ dài 45s mỗi clip:
-.\.venv\Scripts\python.exe main.py "D:\Videos\match.mp4" --type sports --num-clips 10 --duration 45
-
-# Cắt video trò chuyện ép ngôn ngữ tiếng Việt:
-.\.venv\Scripts\python.exe main.py "talkshow.mp4" --type speech --language vi --num-clips 5
+# macOS / Linux:
+source .venv/bin/activate
+python main.py "video.mp4" --type speech --num-clips 5 --crop-style blur
 ```
+
+#### Bảng tham số chi tiết của `main.py`:
+| Tham số | Mặc định | Tùy chọn | Mô tả |
+|---|---|---|---|
+| `url` | *(Bắt buộc)* | File path hoặc link YouTube | Đường dẫn video local (`.mp4`, `.mov`, `.mkv`) hoặc URL YouTube |
+| `--type` | `auto` | `auto`, `speech`, `sports` | `speech`: dùng Whisper + LLM; `sports`: dùng Audio Peaks; `auto`: tự chọn |
+| `--num-clips` | `3` | Số nguyên (ví dụ: `5`, `10`) | Số lượng clip Shorts cần cắt |
+| `--crop-style` | `blur` | `blur`, `face` | `blur`: 1080x1920 Pillarbox Blur thẩm mỹ; `face`: OpenCV bám sát khuôn mặt |
+| `--aspect-ratio`| `9:16` | `9:16`, `1:1` | Tỷ lệ khung hình xuất ra |
+| `--duration` | `45.0` | Số thực (giây) | Thời lượng mỗi clip khi chạy chế độ thể thao (`sports`) |
+| `--language` | `None` | `vi`, `en`, `ja`... | Ngôn ngữ phiên âm Whisper (để trống để tự động nhận diện) |
+| `--output-dir` | `output` | Thư mục bất kỳ | Thư mục lưu các file video Shorts hoàn thiện |
 
 ---
 
-## ⚙️ Tùy Chọn Cấu Hình (`.env`)
+## ⚙️ Cấu Hình Nâng Cao (`.env`)
 
-Mở file `.env` để tùy biến theo nhu cầu:
+Tệp `.env` được tạo sẵn khi chạy `setup`. Bạn có thể tùy biến:
 
 ```env
-# 1. Chọn nguồn trí tuệ nhân tạo:
-#    - "ollama": Chạy 100% Offline trên máy (Mặc định, không cần key)
-#    - "gemini": Dùng Google Gemini API (Miễn phí hạn mức lớn, siêu nhanh)
+# 1. Chọn LLM Provider:
+#    - "ollama": Chạy 100% Offline trên máy (Mặc định, Miễn phí, Không cần Key)
+#    - "gemini": Dùng Google Gemini API (Miễn phí từ aistudio.google.com, siêu nhanh)
 #    - "openai": Dùng OpenAI API
 LLM_PROVIDER=ollama
 
@@ -90,15 +163,16 @@ LLM_PROVIDER=ollama
 OLLAMA_BASE_URL=http://localhost:11434/v1
 OLLAMA_MODEL=qwen2.5:3b
 
-# Cấu hình Gemini Cloud (tùy chọn):
+# Cấu hình Google Gemini Cloud (Tùy chọn nếu muốn tăng tốc độ tối đa):
 GEMINI_API_KEY=your_gemini_api_key_here
 GEMINI_MODEL=gemini-2.5-flash
 
-# Cấu hình Whisper:
+# Cấu hình Whisper (Local STT):
+# Các size: tiny, base, small, medium, large-v3 (Khuyên dùng 'base' hoặc 'small' trên CPU)
 LOCAL_WHISPER_MODEL=base
-LOCAL_WHISPER_DEVICE=cpu
+LOCAL_WHISPER_DEVICE=auto
 
-# Thư mục lưu kết quả:
+# Thư mục lưu video đầu ra:
 LOCAL_OUTPUT_DIR=output
 ```
 
@@ -107,36 +181,48 @@ LOCAL_OUTPUT_DIR=output
 ## 📂 Cấu Trúc Thư Mục Dự Án
 
 ```
-AI-Youtube-Shorts-Generator/
+into_short_clips/
 ├── shorts_generator/          # Nhân mã nguồn chính của AI Pipeline
-│   ├── sports.py             # Engine bóc tách highlight thể thao (Audio Energy Peaks)
-│   ├── pipeline.py           # Engine điều phối chung
-│   ├── highlights.py         # Prompt LLM phân tích virality & hooks
+│   ├── sports.py             # Engine cắt highlight thể thao (Audio Energy Peaks)
+│   ├── pipeline.py           # Bộ điều phối quy trình tự động
+│   ├── highlights.py         # Prompt LLM phân tích virality & hook moments
 │   └── local/
-│       ├── transcriber.py    # Phiên âm nhanh qua faster-whisper (CPU int8)
-│       ├── clipper.py        # Cắt clip & bám mặt người nói qua OpenCV
-│       └── llm.py            # Kết nối Ollama, Gemini, OpenAI
+│       ├── transcriber.py    # Phiên âm nhanh qua faster-whisper (CPU int8 / GPU)
+│       ├── clipper.py        # Xuất video 1080x1920 Pillarbox Blur & OpenCV Face Crop
+│       └── llm.py            # Client kết nối Ollama (offline), Gemini, OpenAI
 ├── main.py                   # Điểm khởi chạy CLI chính
-├── setup.bat / setup.ps1     # Script cài đặt môi trường 1-click
-├── run.bat / run.ps1         # Script chạy cắt Shorts 1-click
-├── requirements-local.txt    # Danh sách thư viện đã được kiểm thử ổn định
-├── Dockerfile                # File đóng gói Docker
-├── docker-compose.yml        # Cấu hình khởi chạy qua Docker
+├── setup.bat / setup.ps1     # Script cài đặt môi trường 1-click cho Windows
+├── run.bat / run.ps1         # Script chạy cắt Shorts 1-click cho Windows
+├── setup.sh                  # Script cài đặt 1-click cho macOS / Linux
+├── run.sh                    # Script chạy 1-click cho macOS / Linux
+├── requirements-local.txt    # Danh sách thư viện Python chuẩn đã kiểm thử
+├── Dockerfile                # File cấu hình Docker
+├── docker-compose.yml        # Cấu hình triển khai nhanh Docker
 └── output/                   # Thư mục chứa các video Shorts xuất ra
 ```
 
 ---
 
-## 🛠️ Khắc Phục Lỗi Thường Gặp (Troubleshooting)
+## 🛠️ Câu Hỏi Thường Gặp & Khắc Phục Lỗi (FAQ & Troubleshooting)
 
-1. **Lỗi `av` hoặc `ffmpeg`:**  
-   Kho dữ liệu đã được ghim phiên bản `av<14` và `opencv-python<5` để đảm bảo độ tương thích 100% với Windows.
-2. **Lỗi Windows File Lock:**  
-   Hệ thống đã tích hợp cơ chế tự động giải phóng bộ nhớ `gc.collect()` và retry an toàn khi xóa file tạm.
-3. **Mô hình AI trên máy không có GPU rời:**  
-   Hệ thống được tối ưu hóa đặc biệt để chạy mượt mà ngay trên **CPU thông thường (Intel Core i5/i7) với 8GB-16GB RAM** thông qua `faster-whisper-base (int8)` và mô hình `qwen2.5:3b`.
+### 1. Video mở lên trên Windows chỉ có tiếng mà không có hình?
+* **Đã được giải quyết triệt để:** Dự án sử dụng bộ mã hóa chuẩn quốc tế **H.264 (`avc1`)** với định dạng màu `yuv420p` và cờ `+faststart`. Video phát mượt mà trên tất cả trình phát: Windows Media Player, QuickTime, Movies & TV, Chrome, VLC.
+
+### 2. Máy tính không có card đồ họa rời (GPU) có chạy được không?
+* **Hoàn toàn mượt mà!** Pipeline được tinh chỉnh tối ưu hóa chạy trực tiếp trên **CPU thông thường (Intel Core i3/i5/i7, AMD Ryzen hoặc Apple M-series)** với 8GB-16GB RAM:
+  - Whisper chạy ở chế độ lượng tử hóa `int8` (tiết kiệm 70% RAM).
+  - LLM Ollama `qwen2.5:3b` chỉ chiếm ~1.8GB RAM và phản hồi trong vài giây.
+
+### 3. Phụ đề có bị cắt cụt hai bên khi chuyển sang video dọc 9:16 không?
+* Chế độ mặc định **Pillarbox Blur (1080x1920)** giữ nguyên 100% chiều ngang video gốc ở giữa, hai dải trên dưới được làm mờ thẩm mỹ, đảm bảo không bao giờ bị che khuất phụ đề hay logo.
+
+### 4. Lỗi phân quyền khi chạy script trên macOS / Linux?
+* Mở terminal và cấp quyền thực thi:
+  ```bash
+  chmod +x setup.sh run.sh
+  ```
 
 ---
 
 ## 📜 Giấy Phép (License)
-Dự án được phân phối dưới giấy phép **MIT License**. Bạn có thể tự do sử dụng, chỉnh sửa và tích hợp vào các dự án thương mại hoặc cá nhân.
+Dự án được phân phối dưới giấy phép **MIT License**. Bạn được tự do sử dụng, chỉnh sửa và tích hợp vào các dự án thương mại hoặc cá nhân.
