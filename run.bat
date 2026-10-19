@@ -12,7 +12,8 @@ if "%~1"=="" (
     echo   run.bat "https://www.youtube.com/watch?v=XYZ" 5 speech
     echo ==========================================================
     pause
-    exit /b 1
+    exit /b 2
 )
 
 powershell -ExecutionPolicy Bypass -File "%~dp0run.ps1" "%~1" %2 %3 %4 %5 %6
+exit /b %ERRORLEVEL%

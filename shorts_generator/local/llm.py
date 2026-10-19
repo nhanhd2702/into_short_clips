@@ -75,7 +75,7 @@ def call_gemini_llm(prompt: str) -> str:
 
 def call_local_llm(prompt: str) -> str:
     """Dispatch to the configured local LLM provider."""
-    provider = (LLM_PROVIDER or "openai").strip().lower()
+    provider = (LLM_PROVIDER or "ollama").strip().lower()
     if provider == "openai":
         return call_openai_llm(prompt)
     if provider == "ollama":
@@ -85,3 +85,58 @@ def call_local_llm(prompt: str) -> str:
     raise RuntimeError(
         f"Unknown LLM_PROVIDER={provider!r}. Use 'ollama', 'gemini', or 'openai'."
     )
+
+
+def check_ollama_ready() -> None:
+    """Check that Ollama server is running and configured model is available."""
+    import json
+    import urllib.request
+    from urllib.parse import urlparse
+
+    parsed = urlparse(OLLAMA_BASE_URL)
+    tags_url = f"{parsed.scheme}://{parsed.netloc}/api/tags"
+
+    try:
+        req = urllib.request.Request(tags_url, headers={"User-Agent": "into_short_clips"})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        raise RuntimeError(
+            f"Ollama server is not responding at {tags_url} ({e}).\n"
+            f"Please ensure Ollama is installed and running ('ollama serve') "
+            f"or run through run.ps1 / run.bat / run.sh."
+        ) from e
+
+    installed_models = [m.get("name", "") for m in data.get("models", [])]
+    target = OLLAMA_MODEL.strip().lower()
+    matches = any(
+        m.lower() == target or m.lower().startswith(f"{target}:") or f"{target}:latest" == m.lower()
+        for m in installed_models
+    )
+    if not matches and installed_models:
+        base_target = target.split(":")[0]
+        matches = any(m.lower().startswith(f"{base_target}:") for m in installed_models)
+
+    if not matches:
+        raise RuntimeError(
+            f"Configured Ollama model {OLLAMA_MODEL!r} is not installed locally.\n"
+            f"Installed models: {installed_models or 'None'}\n"
+            f"Please download it by running:\n"
+            f"    ollama pull {OLLAMA_MODEL}"
+        )
+
+
+def verify_llm_provider_readiness() -> None:
+    """Validate that the configured LLM provider and credentials/server are ready before processing."""
+    provider = (LLM_PROVIDER or "ollama").strip().lower()
+    if provider == "ollama":
+        check_ollama_ready()
+    elif provider == "gemini":
+        require_gemini_key()
+    elif provider == "openai":
+        require_openai_key()
+    else:
+        raise RuntimeError(
+            f"Unknown LLM_PROVIDER={provider!r}. Supported providers: 'ollama', 'gemini', 'openai'."
+        )
+

@@ -34,8 +34,8 @@ def crop_highlights(source_video_url: str, highlights: list, aspect_ratio: str =
                 h["end_time"],
                 aspect_ratio=aspect_ratio,
             )
-            out.append({**h, "clip_url": url})
+            out.append({**h, "clip_url": url, "status": "success"})
         except Exception as e:
             print(f"[clip] {i} failed: {e}", flush=True)
-            out.append({**h, "clip_url": None, "error": str(e)})
+            out.append({**h, "clip_url": None, "error": str(e), "status": "failed"})
     return out

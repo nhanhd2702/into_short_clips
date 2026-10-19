@@ -139,12 +139,40 @@ python main.py "video.mp4" --type speech --num-clips 5 --crop-style blur
 |---|---|---|---|
 | `url` | *(Bắt buộc)* | File path hoặc link YouTube | Đường dẫn video local (`.mp4`, `.mov`, `.mkv`) hoặc URL YouTube |
 | `--type` | `auto` | `auto`, `speech`, `sports` | `speech`: dùng Whisper + LLM; `sports`: dùng Audio Peaks; `auto`: tự chọn |
-| `--num-clips` | `3` | Số nguyên (ví dụ: `5`, `10`) | Số lượng clip Shorts cần cắt |
+| `--num-clips` | `3` | Số nguyên > 0 (ví dụ: `5`, `10`) | Số lượng clip Shorts cần cắt |
 | `--crop-style` | `blur` | `blur`, `face` | `blur`: 1080x1920 Pillarbox Blur thẩm mỹ; `face`: OpenCV bám sát khuôn mặt |
-| `--aspect-ratio`| `9:16` | `9:16`, `1:1` | Tỷ lệ khung hình xuất ra |
+| `--aspect-ratio`| `9:16` | `9:16`, `1:1`, `16:9` | Tỷ lệ khung hình xuất ra (Sports chỉ hỗ trợ 9:16) |
 | `--duration` | `45.0` | Số thực (giây) | Thời lượng mỗi clip khi chạy chế độ thể thao (`sports`) |
 | `--language` | `None` | `vi`, `en`, `ja`... | Ngôn ngữ phiên âm Whisper (để trống để tự động nhận diện) |
-| `--output-dir` | `output` | Thư mục bất kỳ | Thư mục lưu các file video Shorts hoàn thiện |
+| `--output-dir` | `output` | Thư mục bất kỳ | Thư mục cơ sở lưu các file video Shorts hoàn thiện |
+| `--overwrite` | `False` | Cờ bật | Ghi đè trực tiếp thư mục đầu ra thay vì tạo thư mục run riêng |
+| `--output-json`| `None` | Đường dẫn file `.json` | Xuất toàn bộ kết quả cấu trúc JSON ra file chỉ định |
+
+#### Chuẩn hóa Mã Trả Về (Exit Codes):
+| Exit Code | Trạng thái | Ý nghĩa |
+|:---:|:---|:---|
+| `0` | `success` | Tất cả clip được chọn đều render thành công và hợp lệ |
+| `1` | `failure` | Pipeline thất bại hoặc không render được bất kỳ clip nào |
+| `2` | `invalid_input` | Tham số không hợp lệ, file nguồn không tồn tại, hoặc thiếu luồng âm thanh |
+| `3` | `partial_success` | Xuất thành công một phần (ít nhất 1 clip thành công và 1 clip lỗi) |
+
+---
+
+## 🛡️ Chống Ghi Đè & Quản Lý Run Manifest
+Mỗi lần chạy sẽ tự động tạo một thư mục con cô lập để bảo đảm không xảy ra tranh chấp hoặc ghi đè kết quả khi chạy đồng thời:
+```
+output/
+└── <tên_video>/
+    └── run_YYYYMMDD_HHMMSS_<uid>/
+        ├── sports_short_01.mp4 (hoặc short_01.mp4)
+        ├── sports_short_02.mp4
+        └── manifest.json
+```
+Tệp **`manifest.json`** lưu lại toàn bộ siêu dữ liệu:
+* Cấu hình tham số đã dùng (model, crop style, aspect ratio).
+* Thời gian bắt đầu và kết thúc xử lý.
+* Chi tiết từng clip: khoảng thời gian (`start_time` → `end_time`), điểm số năng lượng / virality, đường dẫn video xuất ra.
+* Thống kê: `requested`, `selected`, `succeeded`, `failed`, `status`.
 
 ---
 
@@ -160,6 +188,8 @@ Tệp `.env` được tạo sẵn khi chạy `setup`. Bạn có thể tùy biế
 LLM_PROVIDER=ollama
 
 # Cấu hình Ollama Offline:
+# Lưu ý: Khi chạy ứng dụng bằng Docker và Ollama ở máy Host, đổi URL thành:
+# OLLAMA_BASE_URL=http://host.docker.internal:11434/v1
 OLLAMA_BASE_URL=http://localhost:11434/v1
 OLLAMA_MODEL=qwen2.5:3b
 
@@ -186,18 +216,21 @@ into_short_clips/
 │   ├── sports.py             # Engine cắt highlight thể thao (Audio Energy Peaks)
 │   ├── pipeline.py           # Bộ điều phối quy trình tự động
 │   ├── highlights.py         # Prompt LLM phân tích virality & hook moments
+│   ├── validation.py         # Kiểm tra tính hợp lệ tham số và stream video/audio sớm
+│   ├── run_context.py        # Quản lý run directory cô lập và ghi manifest.json
 │   └── local/
-│       ├── transcriber.py    # Phiên âm nhanh qua faster-whisper (CPU int8 / GPU)
+│       ├── transcriber.py    # Phiên âm nhanh qua faster-whisper kèm Subtitle Cache bền vững
 │       ├── clipper.py        # Xuất video 1080x1920 Pillarbox Blur & OpenCV Face Crop
-│       └── llm.py            # Client kết nối Ollama (offline), Gemini, OpenAI
-├── main.py                   # Điểm khởi chạy CLI chính
-├── setup.bat / setup.ps1     # Script cài đặt môi trường 1-click cho Windows
+│       └── llm.py            # Client kết nối Ollama (offline), Gemini, OpenAI & Health Check
+├── tests/                    # Bộ kiểm thử tự động toàn diện (Unit & Integration tests)
+├── main.py                   # Điểm khởi chạy CLI chính với exit codes chuẩn hóa
+├── setup.bat / setup.ps1     # Script cài đặt môi trường 1-click cho Windows (-SportsOnly tùy chọn)
 ├── run.bat / run.ps1         # Script chạy cắt Shorts 1-click cho Windows
-├── setup.sh                  # Script cài đặt 1-click cho macOS / Linux
+├── setup.sh                  # Script cài đặt 1-click cho macOS / Linux (--sports-only tùy chọn)
 ├── run.sh                    # Script chạy 1-click cho macOS / Linux
 ├── requirements-local.txt    # Danh sách thư viện Python chuẩn đã kiểm thử
 ├── Dockerfile                # File cấu hình Docker
-├── docker-compose.yml        # Cấu hình triển khai nhanh Docker
+├── docker-compose.yml        # Cấu hình triển khai nhanh Docker (kèm host.docker.internal)
 └── output/                   # Thư mục chứa các video Shorts xuất ra
 ```
 

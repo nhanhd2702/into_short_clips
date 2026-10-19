@@ -27,7 +27,7 @@ if [ -z "$1" ]; then
     echo "  4. Cat crop bam mat nguoi noi (Face Tracking):"
     echo "     ./run.sh 'interview.mp4' --crop-style face --num-clips 3"
     echo "=========================================================="
-    exit 0
+    exit 2
 fi
 
 # 1. Kich hoat moi truong ao
@@ -38,17 +38,42 @@ else
     exit 1
 fi
 
-# 2. Dam bao Ollama dang chay neu duoc cai dat
-if command -v ollama &>/dev/null; then
-    if ! pgrep -x "ollama" > /dev/null; then
-        echo "[Ollama] Dang khoi dong Ollama serve ngam..."
-        ollama serve &>/dev/null &
-        sleep 2
+# 2. Xac dinh co can Ollama khong
+IS_SPORTS=0
+for arg in "$@"; do
+    if [ "$arg" = "sports" ] || [ "$arg" = "--type=sports" ]; then
+        IS_SPORTS=1
+        break
+    fi
+done
+
+if [ "$IS_SPORTS" -eq 0 ]; then
+    NEEDS_OLLAMA=1
+    if [ -f ".env" ]; then
+        if grep -E 'LLM_PROVIDER\s*=\s*["'\'']?(openai|gemini)["'\'']?' .env > /dev/null 2>&1; then
+            NEEDS_OLLAMA=0
+        fi
+    fi
+
+    if [ "$NEEDS_OLLAMA" -eq 1 ] && command -v ollama &>/dev/null; then
+        if ! curl -s -f http://127.0.0.1:11434/api/tags > /dev/null 2>&1; then
+            echo "[Ollama] Dang khoi dong Ollama server ngam..."
+            ollama serve &>/dev/null &
+            # Polling toi da 15s
+            for i in $(seq 1 15); do
+                sleep 1
+                if curl -s -f http://127.0.0.1:11434/api/tags > /dev/null 2>&1; then
+                    echo "[Ollama] Server da san sang!"
+                    break
+                fi
+            done
+        fi
     fi
 fi
 
 # 3. Kiem tra va convert cu phap tham so vi tri neu nguoi dung nhap ngan gon
 # Vi du: ./run.sh video.mp4 3 speech
+set +e
 if [ $# -ge 2 ] && [[ "$2" =~ ^[0-9]+$ ]] && [[ "$3" != --* ]]; then
     VIDEO_ARG="$1"
     NUM_CLIPS="$2"
@@ -56,7 +81,11 @@ if [ $# -ge 2 ] && [[ "$2" =~ ^[0-9]+$ ]] && [[ "$3" != --* ]]; then
     STYLE_ARG="${4:-blur}"
     echo "[Generator] Chay nhanh: $VIDEO_ARG (Clips: $NUM_CLIPS, Type: $TYPE_ARG, Style: $STYLE_ARG)"
     python main.py "$VIDEO_ARG" --num-clips "$NUM_CLIPS" --type "$TYPE_ARG" --crop-style "$STYLE_ARG"
+    EXIT_CODE=$?
 else
     # Truyen nguyen ven cac tham so command line
     python main.py "$@"
+    EXIT_CODE=$?
 fi
+
+exit $EXIT_CODE

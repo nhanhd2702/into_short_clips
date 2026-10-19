@@ -147,6 +147,24 @@ def _safe_remove(path: str, retries: int = 6, delay: float = 0.5):
         pass
 
 
+def _verify_rendered_video(file_path: str) -> bool:
+    """Ensure rendered file exists, is non-empty, and has a readable video stream."""
+    if not os.path.isfile(file_path) or os.path.getsize(file_path) < 1024:
+        return False
+    try:
+        cmd = [
+            "ffprobe", "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=width,height",
+            "-of", "csv=p=0",
+            file_path,
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return bool(res.stdout.strip())
+    except Exception:
+        return False
+
+
 def render_pillarbox_blur_916(
     source_path: str,
     start_time: float,
@@ -179,7 +197,16 @@ def render_pillarbox_blur_916(
         "-threads", "0",
         out_path,
     ]
-    subprocess.run(cmd, check=True)
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as e:
+        _safe_remove(out_path)
+        raise RuntimeError(f"FFmpeg render failed with exit code {e.returncode}") from e
+
+    if not _verify_rendered_video(out_path):
+        _safe_remove(out_path)
+        raise RuntimeError(f"Rendered file {out_path} is invalid, corrupt, or missing video stream.")
+
     return out_path
 
 
@@ -199,8 +226,16 @@ def crop_clip_local(
     try:
         _cut_subclip(source_path, start_time, end_time, cut_path)
         _reframe_vertical(cut_path, out_path, aspect_ratio)
+    except Exception:
+        _safe_remove(out_path)
+        raise
     finally:
         _safe_remove(cut_path)
+
+    if not _verify_rendered_video(out_path):
+        _safe_remove(out_path)
+        raise RuntimeError(f"Rendered file {out_path} is invalid or has no video stream.")
+
     return out_path
 
 
@@ -228,8 +263,9 @@ def crop_highlights_local(
                 out_path,
                 crop_style=crop_style,
             )
-            results.append({**h, "clip_url": out_path})
+            results.append({**h, "clip_url": out_path, "status": "success"})
         except Exception as e:
             print(f"[clip/local] {i} failed: {e}", flush=True)
-            results.append({**h, "clip_url": None, "error": str(e)})
+            _safe_remove(out_path)
+            results.append({**h, "clip_url": None, "error": str(e), "status": "failed"})
     return results

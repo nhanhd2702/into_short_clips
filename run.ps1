@@ -36,21 +36,62 @@ if (-not $UrlOrPath) {
     Write-Host "     .\run.ps1 `"match.mov`" 10 sports blur 9:16 45"
     Write-Host "  4. Tu dong nhan dien (mac dinh):"
     Write-Host "     .\run.ps1 `"video.mp4`" 3"
-    exit 0
+    exit 2
 }
 
-# 1. Kiem tra va khoi dong Ollama neu chua chay
-$ollamaProc = Get-Process ollama -ErrorAction SilentlyContinue
-if (-not $ollamaProc) {
-    $ollamaExe = "ollama"
-    if (-not (Get-Command ollama -ErrorAction SilentlyContinue)) {
-        if (Test-Path "$PSScriptRoot\ollama_bin\ollama.exe") {
-            $ollamaExe = "$PSScriptRoot\ollama_bin\ollama.exe"
+# 1. Kiem tra va khoi dong Ollama neu can thiet (chi khi chay speech hoac auto voi provider ollama)
+if ($Type -ne "sports") {
+    $needsOllama = $true
+    if (Test-Path "$PSScriptRoot\.env") {
+        $envContent = Get-Content "$PSScriptRoot\.env" -Raw
+        if ($envContent -match 'LLM_PROVIDER\s*=\s*["'']?(openai|gemini)["'']?') {
+            $needsOllama = $false
         }
     }
-    Write-Host "[Ollama] Dang khoi dong Ollama server ngam..." -ForegroundColor Cyan
-    Start-Process -FilePath $ollamaExe -ArgumentList "serve" -WindowStyle Hidden
-    Start-Sleep -Seconds 3
+    if ($needsOllama) {
+        $ollamaHealthy = $false
+        try {
+            $null = Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/tags" -Method Get -TimeoutSec 2 -ErrorAction Stop
+            $ollamaHealthy = $true
+        } catch {
+            $ollamaHealthy = $false
+        }
+
+        if (-not $ollamaHealthy) {
+            $ollamaExe = "ollama"
+            if (-not (Get-Command ollama -ErrorAction SilentlyContinue)) {
+                if (Test-Path "$PSScriptRoot\ollama_bin\ollama.exe") {
+                    $ollamaExe = "$PSScriptRoot\ollama_bin\ollama.exe"
+                }
+            }
+            Write-Host "[Ollama] Dang khoi dong Ollama server ngam..." -ForegroundColor Cyan
+            try {
+                Start-Process -FilePath $ollamaExe -ArgumentList "serve" -WindowStyle Hidden
+            } catch {
+                Write-Host "[Ollama] Khong the tu dong khoi dong Ollama: $_" -ForegroundColor Yellow
+            }
+
+            # Polling cho toi khi server phan hoi (toi da 15 giay)
+            $timeout = 15
+            $elapsed = 0
+            while ($elapsed -lt $timeout) {
+                Start-Sleep -Seconds 1
+                $elapsed += 1
+                try {
+                    $null = Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/tags" -Method Get -TimeoutSec 2 -ErrorAction Stop
+                    $ollamaHealthy = $true
+                    break
+                } catch {
+                    $ollamaHealthy = $false
+                }
+            }
+            if ($ollamaHealthy) {
+                Write-Host "[Ollama] Server da san sang!" -ForegroundColor Green
+            } else {
+                Write-Host "[Ollama] Canh bao: Chua the ket noi toi Ollama tai http://127.0.0.1:11434 sau ${timeout}s." -ForegroundColor Yellow
+            }
+        }
+    }
 }
 
 # 2. Tu dong bo sung ffmpeg_bin va ollama_bin vao PATH neu co
@@ -61,6 +102,18 @@ if (Test-Path "$PSScriptRoot\ollama_bin") {
     $env:PATH = "$PSScriptRoot\ollama_bin;$env:PATH"
 }
 
-# 3. Goi engine chay tao Shorts
+# 3. Kiem tra moi truong Python
+$pyExe = "$PSScriptRoot\.venv\Scripts\python.exe"
+if (-not (Test-Path $pyExe)) {
+    if (Get-Command python -ErrorAction SilentlyContinue) {
+        $pyExe = "python"
+    } else {
+        Write-Host "[Loi] Khong tim thay Python hoac moi truong .venv! Vui long chay setup.bat truoc." -ForegroundColor Red
+        exit 1
+    }
+}
+
+# 4. Goi engine chay tao Shorts
 Write-Host "[Generator] Bat dau xu ly: $UrlOrPath (Type: $Type, Clips: $NumClips, Style: $CropStyle)" -ForegroundColor Yellow
-& ".\.venv\Scripts\python.exe" main.py $UrlOrPath --type $Type --num-clips $NumClips --aspect-ratio $AspectRatio --duration $Duration --crop-style $CropStyle
+& $pyExe "$PSScriptRoot\main.py" $UrlOrPath --type $Type --num-clips $NumClips --aspect-ratio $AspectRatio --duration $Duration --crop-style $CropStyle
+exit $LASTEXITCODE

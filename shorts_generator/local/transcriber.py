@@ -2,20 +2,23 @@
 
 Reads a local media file and returns the same shape the highlight generator
 expects: {duration, segments[start, end, text]}.
+Includes robust metadata-validated, atomic caching in `output/cache/transcripts/<hash>/`.
 """
+import datetime
+import hashlib
+import json
 import os
 import re
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
-from ..config import LOCAL_OUTPUT_DIR, LOCAL_WHISPER_DEVICE, LOCAL_WHISPER_MODEL
-
-
-def _transcript_cache_path(media_path: str) -> Path:
-    """Return the .srt cache path for a media file."""
-    cache_dir = Path(LOCAL_OUTPUT_DIR)
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    return cache_dir / (Path(media_path).stem + ".srt")
+from ..config import (
+    LOCAL_OUTPUT_DIR,
+    LOCAL_WHISPER_DEVICE,
+    LOCAL_WHISPER_MODEL,
+    LOCAL_WHISPER_VAD_FILTER,
+    LOCAL_WHISPER_VAD_PARAMETERS,
+)
 
 
 def _format_srt_timestamp(seconds: float) -> str:
@@ -37,24 +40,40 @@ def _parse_srt_timestamp(value: str) -> float:
     return hours * 3600 + minutes * 60 + seconds + (millis / 1000.0)
 
 
-def _write_srt_cache(media_path: str, transcript: Dict) -> Path:
-    cache_path = _transcript_cache_path(media_path)
-    lines = []
-    for idx, segment in enumerate(transcript.get("segments", []), start=1):
-        start = _format_srt_timestamp(float(segment["start"]))
-        end = _format_srt_timestamp(float(segment["end"]))
-        text = str(segment.get("text", "")).strip().replace("\r", "").replace("\n", " ")
-        lines.append(str(idx))
-        lines.append(f"{start} --> {end}")
-        lines.append(text)
-        lines.append("")
+def _compute_cache_identity(media_path: str, language: Optional[str] = None) -> Tuple[str, Dict]:
+    """Generate a unique cache key based on absolute path, file size, mtime_ns, model, and language."""
+    norm_path = os.path.abspath(os.path.realpath(media_path))
+    if not os.path.exists(norm_path):
+        raise FileNotFoundError(f"Source media file not found: {media_path}")
 
-    cache_path.write_text("\n".join(lines), encoding="utf-8")
-    return cache_path
+    stat = os.stat(norm_path)
+    file_size = stat.st_size
+    mtime_ns = getattr(stat, "st_mtime_ns", int(stat.st_mtime * 1e9))
+    lang = (language or "auto").strip().lower()
+    vad_sig = f"{LOCAL_WHISPER_VAD_FILTER}_{json.dumps(LOCAL_WHISPER_VAD_PARAMETERS, sort_keys=True)}"
+
+    identity_str = f"{norm_path}|{file_size}|{mtime_ns}|{LOCAL_WHISPER_MODEL}|{lang}|{vad_sig}"
+    cache_key = hashlib.sha256(identity_str.encode("utf-8")).hexdigest()[:20]
+
+    metadata = {
+        "cache_key": cache_key,
+        "source_path": norm_path,
+        "file_size": file_size,
+        "mtime_ns": mtime_ns,
+        "whisper_model": LOCAL_WHISPER_MODEL,
+        "language": lang,
+        "vad_filter": LOCAL_WHISPER_VAD_FILTER,
+    }
+    return cache_key, metadata
 
 
-def _load_srt_cache(cache_path: Path) -> Dict:
-    content = cache_path.read_text(encoding="utf-8-sig").strip()
+def _get_cache_dir(cache_key: str, base_out_dir: Optional[str] = None) -> Path:
+    base = Path(base_out_dir or LOCAL_OUTPUT_DIR)
+    return base / "cache" / "transcripts" / cache_key
+
+
+def _load_srt_content(content: str) -> Dict:
+    content = content.strip()
     if not content:
         return {"duration": 0.0, "segments": []}
 
@@ -81,13 +100,81 @@ def _load_srt_cache(cache_path: Path) -> Dict:
     return {"duration": duration, "segments": segments}
 
 
+def _load_cached_transcript(cache_dir: Path, expected_meta: Dict) -> Optional[Dict]:
+    """Verify metadata and content before reusing cached transcript."""
+    meta_path = cache_dir / "metadata.json"
+    srt_path = cache_dir / "transcript.srt"
+
+    if not meta_path.is_file() or not srt_path.is_file():
+        return None
+
+    try:
+        with open(meta_path, "r", encoding="utf-8") as f:
+            stored_meta = json.load(f)
+
+        # Verify all essential fields match exactly
+        for field in ("source_path", "file_size", "mtime_ns", "whisper_model", "language"):
+            if stored_meta.get(field) != expected_meta.get(field):
+                print(
+                    f"[transcribe/local] Cache metadata mismatch for {field}: "
+                    f"stored={stored_meta.get(field)!r} vs current={expected_meta.get(field)!r}",
+                    flush=True,
+                )
+                return None
+
+        content = srt_path.read_text(encoding="utf-8-sig")
+        cached = _load_srt_content(content)
+        if not cached["segments"] or cached["duration"] <= 0.0:
+            print(f"[transcribe/local] Cache file {srt_path} is empty or contains no valid segments", flush=True)
+            return None
+
+        return cached
+    except Exception as e:
+        print(f"[transcribe/local] Failed to read cache {cache_dir}: {e}", flush=True)
+        return None
+
+
+def _save_transcript_cache(cache_dir: Path, metadata: Dict, transcript: Dict) -> Path:
+    """Atomically write metadata.json and transcript.srt."""
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    srt_lines = []
+    for idx, segment in enumerate(transcript.get("segments", []), start=1):
+        start = _format_srt_timestamp(float(segment["start"]))
+        end = _format_srt_timestamp(float(segment["end"]))
+        text = str(segment.get("text", "")).strip().replace("\r", "").replace("\n", " ")
+        srt_lines.append(str(idx))
+        srt_lines.append(f"{start} --> {end}")
+        srt_lines.append(text)
+        srt_lines.append("")
+
+    srt_content = "\n".join(srt_lines)
+    full_meta = {
+        **metadata,
+        "duration": transcript.get("duration", 0.0),
+        "num_segments": len(transcript.get("segments", [])),
+        "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }
+
+    # Atomic write to temporary files then rename
+    tmp_srt = cache_dir / "transcript.srt.tmp"
+    tmp_meta = cache_dir / "metadata.json.tmp"
+    final_srt = cache_dir / "transcript.srt"
+    final_meta = cache_dir / "metadata.json"
+
+    tmp_srt.write_text(srt_content, encoding="utf-8")
+    tmp_meta.write_text(json.dumps(full_meta, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    os.replace(str(tmp_srt), str(final_srt))
+    os.replace(str(tmp_meta), str(final_meta))
+    return final_srt
+
+
 def _resolve_device() -> str:
     if LOCAL_WHISPER_DEVICE != "auto":
         return LOCAL_WHISPER_DEVICE
     try:
         import torch  # type: ignore
         if torch.cuda.is_available():
-            # Test that CUDA actually works (catches missing cuBLAS/cuDNN libs)
             torch.zeros(1, device="cuda")
             return "cuda"
     except (ImportError, OSError, RuntimeError):
@@ -95,26 +182,40 @@ def _resolve_device() -> str:
     return "cpu"
 
 
-def transcribe_local(media_path: str, language: Optional[str] = None) -> Dict:
-    """Run faster-whisper on a local file path, caching the result as .srt."""
-    cache_path = _transcript_cache_path(media_path)
-    if cache_path.exists():
-        source_mtime = os.path.getmtime(media_path)
-        cache_mtime = cache_path.stat().st_mtime
-        if cache_mtime >= source_mtime:
-            print(f"[transcribe/local] reusing cached transcript: {cache_path}", flush=True)
-            cached = _load_srt_cache(cache_path)
-            # Treat empty cache as invalid (likely from a failed/partial run) — delete and re-transcribe
-            if not cached["segments"] or cached["duration"] <= 0.0:
-                print(f"[transcribe/local] cache is empty/invalid, deleting: {cache_path}", flush=True)
-                cache_path.unlink(missing_ok=True)
-            else:
-                print(
-                    f"[transcribe/local] {len(cached['segments'])} cached segments, "
-                    f"{cached['duration']:.0f}s of audio",
-                    flush=True,
-                )
-                return cached
+def transcribe_local(
+    media_path: str,
+    language: Optional[str] = None,
+    out_dir: Optional[str] = None,
+    export_user_srt: bool = True,
+) -> Dict:
+    """Run faster-whisper on a local file path with validated atomic caching."""
+    cache_key, meta = _compute_cache_identity(media_path, language=language)
+    cache_dir = _get_cache_dir(cache_key, base_out_dir=out_dir)
+
+    cached = _load_cached_transcript(cache_dir, meta)
+    if cached is not None:
+        print(
+            f"[transcribe/local] Reusing validated cache [{cache_key}]: "
+            f"{len(cached['segments'])} segments, {cached['duration']:.1f}s",
+            flush=True,
+        )
+        # Optional: export user-facing srt in output directory if requested
+        if export_user_srt and out_dir:
+            user_srt_dir = Path(out_dir)
+            user_srt_dir.mkdir(parents=True, exist_ok=True)
+            user_srt_path = user_srt_dir / f"{Path(media_path).stem}.srt"
+            if not user_srt_path.exists():
+                try:
+                    user_srt_path.write_text(
+                        (cache_dir / "transcript.srt").read_text(encoding="utf-8"),
+                        encoding="utf-8",
+                    )
+                except Exception:
+                    pass
+        return cached
+
+    # Cache miss or invalid -> Run Whisper transcription
+    print(f"[transcribe/local] Cache miss or invalidated. Running Whisper on: {media_path}", flush=True)
 
     try:
         from faster_whisper import WhisperModel  # type: ignore
@@ -127,8 +228,6 @@ def transcribe_local(media_path: str, language: Optional[str] = None) -> Dict:
     device = _resolve_device()
     compute_type = "float16" if device == "cuda" else "int8"
     print(f"[transcribe/local] faster-whisper model={LOCAL_WHISPER_MODEL} device={device}", flush=True)
-
-    from ..config import LOCAL_WHISPER_VAD_FILTER, LOCAL_WHISPER_VAD_PARAMETERS
 
     model = WhisperModel(LOCAL_WHISPER_MODEL, device=device, compute_type=compute_type)
 
@@ -155,8 +254,23 @@ def transcribe_local(media_path: str, language: Optional[str] = None) -> Dict:
         })
 
     duration = float(getattr(info, "duration", 0.0)) or (segments[-1]["end"] if segments else 0.0)
-    print(f"[transcribe/local] {len(segments)} segments, {duration:.0f}s of audio", flush=True)
+    print(f"[transcribe/local] Transcribed {len(segments)} segments, {duration:.1f}s of audio", flush=True)
     transcript = {"duration": duration, "segments": segments}
-    cache_path = _write_srt_cache(media_path, transcript)
-    print(f"[transcribe/local] wrote cache: {cache_path}", flush=True)
+
+    _save_transcript_cache(cache_dir, meta, transcript)
+    print(f"[transcribe/local] Saved verified cache to: {cache_dir}", flush=True)
+
+    # Optional export for user
+    if export_user_srt and out_dir:
+        user_srt_dir = Path(out_dir)
+        user_srt_dir.mkdir(parents=True, exist_ok=True)
+        user_srt_path = user_srt_dir / f"{Path(media_path).stem}.srt"
+        try:
+            user_srt_path.write_text(
+                (cache_dir / "transcript.srt").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+        except Exception:
+            pass
+
     return transcript
