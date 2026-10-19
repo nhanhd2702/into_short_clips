@@ -187,10 +187,11 @@ def transcribe_local(
     language: Optional[str] = None,
     out_dir: Optional[str] = None,
     export_user_srt: bool = True,
+    cache_root: Optional[str] = None,
 ) -> Dict:
     """Run faster-whisper on a local file path with validated atomic caching."""
     cache_key, meta = _compute_cache_identity(media_path, language=language)
-    cache_dir = _get_cache_dir(cache_key, base_out_dir=out_dir)
+    cache_dir = _get_cache_dir(cache_key, base_out_dir=cache_root)
 
     cached = _load_cached_transcript(cache_dir, meta)
     if cached is not None:
