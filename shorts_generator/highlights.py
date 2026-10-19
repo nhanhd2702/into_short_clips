@@ -184,23 +184,68 @@ def snap_to_segment_boundaries(
                 )
                 start_time = content_start
 
-    # 2. Snap start_time to segment start
+    # 2. Snap start_time to segment start / speech onset
     chosen_start_idx = 0
     min_dist = float("inf")
     search_start = first_content_idx if (start_time < 25.0 and first_content_idx is not None and first_content_idx > 0) else 0
 
     for i in range(search_start, len(segments)):
         seg = segments[i]
-        is_in_seg = (seg["start"] <= start_time < seg["end"]) or (i == len(segments) - 1 and seg["start"] <= start_time <= seg["end"])
+        seg_end = float(seg["end"])
+        seg_start = float(seg["start"])
+        is_in_seg = (seg_start <= start_time < seg_end) or (i == len(segments) - 1 and seg_start <= start_time <= seg_end)
         if is_in_seg:
             chosen_start_idx = i
             break
-        dist = abs(seg["start"] - start_time)
+        dist = abs(seg_start - start_time)
         if dist < min_dist:
             min_dist = dist
             chosen_start_idx = i
 
-    snapped_start = segments[chosen_start_idx]["start"]
+    chosen_seg = segments[chosen_start_idx]
+
+    # Check for speech onset / word timestamps to trim non-speech montage (e.g. TED theme music / silence)
+    speech_onset = chosen_seg.get("speech_start")
+    words = chosen_seg.get("words")
+    if speech_onset is None and words:
+        speech_onset = float(words[0]["start"])
+
+    if words:
+        first_w_start = float(words[0]["start"])
+        # If start_time is before or near the first word, snap directly to the first spoken word
+        if start_time <= first_w_start + 0.5:
+            snapped_start = first_w_start
+            if start_time < first_w_start:
+                print(
+                    f"[highlights] Trimmed non-speech intro montage ({start_time:.2f}s -> {first_w_start:.2f}s)",
+                    flush=True,
+                )
+        else:
+            # Candidate is inside the segment: find word starting closest to start_time
+            chosen_w_start = first_w_start
+            for w in words:
+                w_start = float(w["start"])
+                w_end = float(w["end"])
+                if w_start <= start_time <= w_end:
+                    chosen_w_start = w_start
+                    break
+                if w_start > start_time:
+                    chosen_w_start = w_start
+                    break
+            snapped_start = chosen_w_start
+    elif speech_onset is not None:
+        speech_onset = float(speech_onset)
+        if start_time <= speech_onset:
+            snapped_start = speech_onset
+            if start_time < speech_onset:
+                print(
+                    f"[highlights] Trimmed non-speech intro montage ({start_time:.2f}s -> {speech_onset:.2f}s)",
+                    flush=True,
+                )
+        else:
+            snapped_start = float(chosen_seg["start"])
+    else:
+        snapped_start = float(chosen_seg["start"])
 
     # 3. Determine target duration bounds
     eff_min_dur = min(min_duration, max(15.0, total_duration - snapped_start))

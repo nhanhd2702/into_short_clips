@@ -122,6 +122,16 @@ def _load_cached_transcript(cache_dir: Path, expected_meta: Dict) -> Optional[Di
                 )
                 return None
 
+        # Check if full transcript.json exists (preserves word timestamps & speech onset)
+        json_path = cache_dir / "transcript.json"
+        if json_path.is_file():
+            try:
+                cached_json = json.loads(json_path.read_text(encoding="utf-8"))
+                if cached_json.get("segments") and cached_json.get("duration", 0) > 0:
+                    return cached_json
+            except Exception:
+                pass
+
         content = srt_path.read_text(encoding="utf-8-sig")
         cached = _load_srt_content(content)
         if not cached["segments"] or cached["duration"] <= 0.0:
@@ -135,7 +145,7 @@ def _load_cached_transcript(cache_dir: Path, expected_meta: Dict) -> Optional[Di
 
 
 def _save_transcript_cache(cache_dir: Path, metadata: Dict, transcript: Dict) -> Path:
-    """Atomically write metadata.json and transcript.srt."""
+    """Atomically write metadata.json, transcript.srt, and transcript.json."""
     cache_dir.mkdir(parents=True, exist_ok=True)
     srt_lines = []
     for idx, segment in enumerate(transcript.get("segments", []), start=1):
@@ -158,14 +168,18 @@ def _save_transcript_cache(cache_dir: Path, metadata: Dict, transcript: Dict) ->
     # Atomic write to temporary files then rename
     tmp_srt = cache_dir / "transcript.srt.tmp"
     tmp_meta = cache_dir / "metadata.json.tmp"
+    tmp_json = cache_dir / "transcript.json.tmp"
     final_srt = cache_dir / "transcript.srt"
     final_meta = cache_dir / "metadata.json"
+    final_json = cache_dir / "transcript.json"
 
     tmp_srt.write_text(srt_content, encoding="utf-8")
     tmp_meta.write_text(json.dumps(full_meta, indent=2, ensure_ascii=False), encoding="utf-8")
+    tmp_json.write_text(json.dumps(transcript, indent=2, ensure_ascii=False), encoding="utf-8")
 
     os.replace(str(tmp_srt), str(final_srt))
     os.replace(str(tmp_meta), str(final_meta))
+    os.replace(str(tmp_json), str(final_json))
     return final_srt
 
 
@@ -240,6 +254,7 @@ def transcribe_local(
         "language": language,
         "beam_size": 5,
         "condition_on_previous_text": False,
+        "word_timestamps": True,
     }
     if LOCAL_WHISPER_VAD_FILTER:
         transcribe_kwargs["vad_filter"] = True
@@ -251,10 +266,26 @@ def transcribe_local(
 
     segments = []
     for s in segments_iter:
+        speech_start = round(float(s.start), 3)
+        speech_end = round(float(s.end), 3)
+        words_data = []
+        if hasattr(s, "words") and s.words:
+            words_data = [
+                {"word": w.word, "start": round(float(w.start), 3), "end": round(float(w.end), 3)}
+                for w in s.words
+            ]
+            speech_start = round(float(s.words[0].start), 3)
+            speech_end = round(float(s.words[-1].end), 3)
+
         segments.append({
-            "start": float(s.start),
-            "end": float(s.end),
+            "start": speech_start,        # True speech onset! Trims leading music/intro montage!
+            "end": speech_end,            # True speech end!
+            "raw_start": round(float(s.start), 3),
+            "raw_end": round(float(s.end), 3),
+            "speech_start": speech_start,
+            "speech_end": speech_end,
             "text": (s.text or "").strip(),
+            "words": words_data,
         })
 
     duration = float(getattr(info, "duration", 0.0)) or (segments[-1]["end"] if segments else 0.0)
