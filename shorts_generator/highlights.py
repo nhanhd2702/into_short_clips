@@ -12,7 +12,7 @@ drive either MuAPI (default, --mode api) or a direct local LLM client
 """
 import json
 import re
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 from . import muapi
 
@@ -50,7 +50,8 @@ Your task: identify the most viral-worthy highlights from the transcript.
 Rules:
 - Every highlight must open with a strong HOOK — a line that grabs attention within the first 3 seconds
 - Duration sweet spot: 50-70 seconds (target ~60 seconds). Each clip should deliver a cohesive, meaningful story or insight.
-- Never cut mid-sentence or mid-thought — each clip must feel complete and self-contained
+- STRICTLY EXCLUDE CHANNEL INTROS & CALLS-TO-ACTION: Never start a clip with channel welcomes, host greetings, teasers, or subscription reminders (e.g. "Xin chào các bạn", "Chào mừng quay trở lại", "Hãy like và đăng ký kênh", "Welcome back", "Please subscribe", sponsor plugs). The clip MUST start directly where the actual valuable content or argument begins.
+- COHESIVE SPEECH BOUNDARIES: Align start_time and end_time to full, finished sentences. Never start or end a clip mid-sentence or mid-word.
 - Clips must not overlap significantly with each other
 - Score 0-100 on viral potential (not general quality)
 - {num_clips_instruction}
@@ -124,8 +125,149 @@ def _coerce_int(value: object, default: int = 0) -> int:
         return default
 
 
-def _sanitize_highlights(raw_highlights: object, duration: float) -> List[Dict]:
-    """Normalize model output into the expected shape; skip invalid entries."""
+INTRO_REGEX = re.compile(
+    r"\b("
+    r"chào mừng|chào các bạn|chào quý vị|chào anh chị|chào mọi người|"
+    r"quay trở lại với|kênh của mình|kênh youtube|"
+    r"đăng ký kênh|subscribe|sub kênh|nhớ like|hãy like|bấm chuông|ấn chuông|"
+    r"ủng hộ kênh|theo dõi kênh|chia sẻ video|đừng quên like|đừng quên subscribe|"
+    r"welcome back|welcome to|don't forget to subscribe|hit the subscribe|hit the bell|"
+    r"like and subscribe|subscribe to my channel|please subscribe|in today's video|today we are|"
+    r"before we start|sponsored by"
+    r")\b",
+    re.IGNORECASE,
+)
+
+SENTENCE_END_PUNCTUATION = {".", "?", "!", "…", "...", '"', "'", "”", "’"}
+
+
+def snap_to_segment_boundaries(
+    start_time: float,
+    end_time: float,
+    segments: List[Dict],
+    duration: float = 0.0,
+    min_duration: float = 40.0,
+    max_duration: float = 65.0,
+) -> Tuple[float, float]:
+    """Snap candidate clip boundaries to clean speech segment boundaries and skip channel intros.
+
+    Prevents mid-sentence / mid-word cuts and removes generic greetings/subscribe CTAs.
+    """
+    if not segments:
+        max_limit = duration if duration > 0 else float("inf")
+        s = max(0.0, start_time)
+        e = max(s + min_duration, end_time)
+        if max_limit != float("inf"):
+            s = min(s, max(0.0, max_limit - 5.0))
+            e = min(max_limit, e)
+        return (round(s, 2), round(e, 2))
+
+    total_duration = duration if duration > 0 else segments[-1]["end"]
+
+    # 1. Skip early intro / greeting segments if start_time is near video start (< 25s)
+    if start_time < 25.0:
+        first_content_idx = None
+        for i, seg in enumerate(segments):
+            if seg["start"] >= 30.0:
+                break
+            text = seg.get("text", "").strip()
+            if not INTRO_REGEX.search(text):
+                first_content_idx = i
+                break
+
+        if first_content_idx is not None and first_content_idx > 0:
+            content_start = segments[first_content_idx]["start"]
+            if start_time < content_start:
+                print(
+                    f"[highlights] Skipped channel intro ({start_time:.1f}s), advancing start to {content_start:.1f}s",
+                    flush=True,
+                )
+                start_time = content_start
+
+    # 2. Snap start_time to segment start
+    chosen_start_idx = 0
+    min_dist = float("inf")
+    search_start = first_content_idx if (start_time < 25.0 and first_content_idx is not None and first_content_idx > 0) else 0
+
+    for i in range(search_start, len(segments)):
+        seg = segments[i]
+        is_in_seg = (seg["start"] <= start_time < seg["end"]) or (i == len(segments) - 1 and seg["start"] <= start_time <= seg["end"])
+        if is_in_seg:
+            chosen_start_idx = i
+            break
+        dist = abs(seg["start"] - start_time)
+        if dist < min_dist:
+            min_dist = dist
+            chosen_start_idx = i
+
+    snapped_start = segments[chosen_start_idx]["start"]
+
+    # 3. Determine target duration bounds
+    eff_min_dur = min(min_duration, max(15.0, total_duration - snapped_start))
+    eff_max_dur = min(max_duration, max(eff_min_dur, total_duration - snapped_start))
+
+    # 4. Search candidate segments for snapped_end
+    candidates = []
+    for i in range(chosen_start_idx, len(segments)):
+        seg = segments[i]
+        dur = seg["end"] - snapped_start
+        if dur < eff_min_dur:
+            continue
+        if dur > eff_max_dur:
+            break
+        candidates.append((i, seg))
+
+    if not candidates:
+        for i in range(chosen_start_idx, len(segments)):
+            seg = segments[i]
+            dur = seg["end"] - snapped_start
+            if dur >= eff_min_dur * 0.75:
+                candidates.append((i, seg))
+                if dur >= eff_min_dur:
+                    break
+
+    if not candidates:
+        snapped_end = min(total_duration, segments[-1]["end"])
+        if snapped_end <= snapped_start:
+            snapped_end = min(total_duration, snapped_start + 60.0)
+        return (round(snapped_start, 2), round(snapped_end, 2))
+
+    # 5. Score candidates to pick the cleanest sentence-end
+    best_score = -float("inf")
+    best_end = candidates[0][1]["end"]
+
+    for idx, seg in candidates:
+        dur = seg["end"] - snapped_start
+        text = seg.get("text", "").strip()
+        score = 0.0
+
+        # Sentence-ending punctuation bonus
+        if any(text.endswith(p) for p in SENTENCE_END_PUNCTUATION):
+            score += 100.0
+
+        # Speech pause bonus
+        if idx + 1 < len(segments):
+            pause = segments[idx + 1]["start"] - seg["end"]
+            if pause >= 0.35:
+                score += 30.0
+
+        # Target duration proximity: prefer 55-60s
+        score -= abs(dur - 55.0)
+
+        if score > best_score:
+            best_score = score
+            best_end = seg["end"]
+
+    snapped_end = min(total_duration, best_end)
+    return (round(snapped_start, 2), round(snapped_end, 2))
+
+
+def _sanitize_highlights(
+    raw_highlights: object,
+    duration: float,
+    segments: Optional[List[Dict]] = None,
+) -> List[Dict]:
+    """Normalize model output into the expected shape; snap to segment boundaries."""
     if not isinstance(raw_highlights, list):
         return []
 
@@ -135,14 +277,25 @@ def _sanitize_highlights(raw_highlights: object, duration: float) -> List[Dict]:
         if not isinstance(item, dict):
             continue
 
-        start = _coerce_float(item.get("start_time"), default=-1.0)
-        end = _coerce_float(item.get("end_time"), default=-1.0)
-        if start < 0 or end <= start:
+        raw_start = _coerce_float(item.get("start_time"), default=-1.0)
+        raw_end = _coerce_float(item.get("end_time"), default=-1.0)
+        if raw_start < 0 or raw_end <= raw_start:
             continue
 
-        # If clip is too short, extend it to ~60s for a complete story
-        if end - start < 45.0:
-            end = start + 60.0
+        if segments:
+            start, end = snap_to_segment_boundaries(
+                raw_start,
+                raw_end,
+                segments,
+                duration=duration,
+                min_duration=min(40.0, max(15.0, duration * 0.6)) if duration > 0 else 40.0,
+                max_duration=min(65.0, duration) if duration > 0 else 65.0,
+            )
+        else:
+            start = raw_start
+            end = raw_end
+            if end - start < 40.0 and duration > 0:
+                end = min(duration, start + 60.0)
 
         if max_end != float("inf"):
             start = min(start, max_end)
@@ -208,6 +361,7 @@ def call_highlight_api(
     num_clips: int,
     is_chunk: bool = False,
     llm_fn: LLMFn = call_muapi_llm,
+    segments: Optional[List[Dict]] = None,
 ) -> Dict:
     if is_chunk:
         num_instruction = "Generate 1 or 2 of the most viral highlights from this section"
@@ -236,7 +390,7 @@ def call_highlight_api(
                 raw_h = parsed
             elif isinstance(parsed, dict):
                 raw_h = parsed.get("highlights") or parsed.get("clips") or parsed.get("data") or parsed.get("results")
-            highlights = _sanitize_highlights(raw_h, duration=duration)
+            highlights = _sanitize_highlights(raw_h, duration=duration, segments=segments)
             if highlights:
                 return {"highlights": highlights}
             last_error = f"no valid highlights in response: {raw[:150]}"
@@ -293,6 +447,7 @@ def get_highlights(
     """
     llm_fn = llm_fn or call_muapi_llm
     duration = transcript.get("duration", 0)
+    segments = transcript.get("segments", [])
     content_info = detect_content_type(transcript, llm_fn=llm_fn)
     print(f"[highlights] content={content_info.get('content_type')} density={content_info.get('density')} duration={duration:.0f}s", flush=True)
 
@@ -305,7 +460,15 @@ def get_highlights(
             text = build_transcript_text(chunk)
             print(f"[highlights] chunk {i + 1}/{len(chunks)} (offset {offset:.0f}s)", flush=True)
             try:
-                result = call_highlight_api(text, content_info, duration, num_clips=num_clips, is_chunk=True, llm_fn=llm_fn)
+                result = call_highlight_api(
+                    text,
+                    content_info,
+                    duration,
+                    num_clips=num_clips,
+                    is_chunk=True,
+                    llm_fn=llm_fn,
+                    segments=chunk.get("segments"),
+                )
                 for h in result.get("highlights", []):
                     if float(h["start_time"]) < offset:
                         h["start_time"] = float(h["start_time"]) + offset
@@ -316,10 +479,34 @@ def get_highlights(
 
         if not all_highlights:
             raise RuntimeError("Highlight generator produced zero highlights across all chunks.")
-        highlights = dedupe_highlights(all_highlights)
+        raw_candidates = all_highlights
     else:
         text = build_transcript_text(transcript)
-        result = call_highlight_api(text, content_info, duration, num_clips=num_clips, llm_fn=llm_fn)
-        highlights = dedupe_highlights(result.get("highlights", []))
+        result = call_highlight_api(
+            text,
+            content_info,
+            duration,
+            num_clips=num_clips,
+            llm_fn=llm_fn,
+            segments=segments,
+        )
+        raw_candidates = result.get("highlights", [])
 
+    # Final pass: snap all highlights against full transcript segments and filter intros
+    snapped_highlights: List[Dict] = []
+    for h in raw_candidates:
+        s, e = snap_to_segment_boundaries(
+            float(h["start_time"]),
+            float(h["end_time"]),
+            segments,
+            duration=duration,
+            min_duration=min(40.0, max(15.0, duration * 0.6)) if duration > 0 else 40.0,
+            max_duration=min(65.0, duration) if duration > 0 else 65.0,
+        )
+        if e > s:
+            h["start_time"] = s
+            h["end_time"] = e
+            snapped_highlights.append(h)
+
+    highlights = dedupe_highlights(snapped_highlights)
     return {"highlights": highlights}

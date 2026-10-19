@@ -230,7 +230,10 @@ def transcribe_local(
     compute_type = "float16" if device == "cuda" else "int8"
     print(f"[transcribe/local] faster-whisper model={LOCAL_WHISPER_MODEL} device={device}", flush=True)
 
-    model = WhisperModel(LOCAL_WHISPER_MODEL, device=device, compute_type=compute_type)
+    from .model_downloader import ensure_whisper_model
+    model_dir = ensure_whisper_model(LOCAL_WHISPER_MODEL)
+
+    model = WhisperModel(model_dir, device=device, compute_type=compute_type)
 
     transcribe_kwargs = {
         "audio": media_path,

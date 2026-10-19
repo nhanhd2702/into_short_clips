@@ -81,12 +81,15 @@ if [ ! -d ".venv" ]; then
     $PYTHON_CMD -m venv .venv
 fi
 source .venv/bin/activate
-pip install --upgrade pip --quiet
-pip install -r requirements-local.txt
+python -m pip install --upgrade pip --quiet
+python -m pip install -r requirements-local.txt
 
-# 4. Kiem tra Ollama (neu khong phai SPORTS_ONLY)
+# 4. Kiem tra Whisper model va Ollama (neu khong phai SPORTS_ONLY)
 if [ "$SPORTS_ONLY" -eq 0 ]; then
-    echo -e "\n[4/5] Kiem tra Ollama (cho che do Offline Speech)..."
+    echo -e "\n[4/6] Kiem tra model Whisper (phien am offline)..."
+    python -c "from shorts_generator.local.model_downloader import ensure_whisper_model; ensure_whisper_model('base')" || echo "Canh bao: Khong the tai Whisper model tu dong."
+
+    echo -e "\n[5/6] Kiem tra Ollama (cho che do Offline Speech)..."
     if ! command -v ollama &>/dev/null; then
         echo "  -> Chua tim thay Ollama CLI."
         if [ "$OS_NAME" = "Darwin" ]; then
@@ -106,16 +109,16 @@ if [ "$SPORTS_ONLY" -eq 0 ]; then
         echo "  -> Khoi dong Ollama serve va kiem tra model qwen2.5:3b..."
         if ! curl -s -f http://127.0.0.1:11434/api/tags > /dev/null 2>&1; then
             ollama serve &>/dev/null &
-            sleep 3
+            sleep 4
         fi
-        ollama pull qwen2.5:3b || echo "Luu y: Kiem tra ket noi mang neu can tai model Ollama."
+        ollama pull qwen2.5:3b || echo "Canh bao: Chua tai duoc model qwen2.5:3b."
     fi
 else
-    echo -e "\n[4/5] Bo qua Ollama vi da chon che do --sports-only."
+    echo -e "\n[4/6] Bo qua Whisper va Ollama vi da chon che do --sports-only."
 fi
 
 # 5. Khoi tao .env va cac thu muc
-echo -e "\n[5/5] Khoi tao cau hinh .env & thu muc..."
+echo -e "\n[6/6] Khoi tao cau hinh .env & thu muc..."
 if [ ! -f ".env" ]; then
     cp .env.example .env
     echo "  -> Da tao file .env mac dinh!"
@@ -126,13 +129,34 @@ chmod +x setup.sh run.sh 2>/dev/null || true
 # 6. Final verification
 ALL_PASSED=1
 if [ ! -f ".venv/bin/python" ]; then
-    echo "Loi: Khong tim thay Python venv!"
+    echo "[X] Loi: Khong tim thay Python venv!"
     ALL_PASSED=0
+else
+    echo "[v] Python venv san sang."
 fi
 
 if ! command -v ffmpeg &>/dev/null; then
-    echo "Canh bao: FFmpeg chua duoc tim thay trong PATH."
+    echo "[X] Loi: FFmpeg chua duoc tim thay trong PATH."
     ALL_PASSED=0
+else
+    echo "[v] FFmpeg san sang."
+fi
+
+if [ "$SPORTS_ONLY" -eq 0 ]; then
+    if python -c "from shorts_generator.local.model_downloader import ensure_whisper_model; ensure_whisper_model('base')" &>/dev/null; then
+        echo "[v] Whisper base model san sang."
+    else
+        echo "[X] Loi: Whisper base model chua duoc tai hoac loi hash!"
+        ALL_PASSED=0
+    fi
+
+    if python -c "import urllib.request, json; data=json.loads(urllib.request.urlopen('http://127.0.0.1:11434/api/tags', timeout=3).read()); assert any('qwen2.5:3b' in m.get('name','') for m in data.get('models',[]))" &>/dev/null; then
+        echo "[v] Ollama & model qwen2.5:3b san sang."
+    else
+        echo "[X] Loi: Ollama chua chay hoac chua co model qwen2.5:3b!"
+        echo "    Huong dan: Khoi dong Ollama va chay 'ollama pull qwen2.5:3b'"
+        ALL_PASSED=0
+    fi
 fi
 
 if [ "$ALL_PASSED" -eq 1 ]; then
@@ -147,7 +171,7 @@ if [ "$ALL_PASSED" -eq 1 ]; then
     exit 0
 else
     echo -e "\n=========================================================="
-    echo "  CAI DAT CHUA HOAN TAT! Vui long kiem tra cac canh bao tren."
+    echo "  CAI DAT CHUA HOAN TAT! Vui long kiem tra cac loi tren."
     echo "=========================================================="
     exit 1
 fi

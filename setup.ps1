@@ -61,8 +61,8 @@ $venvPip = "$PSScriptRoot\.venv\Scripts\pip.exe"
 # 3. Cai dat thu vien
 Write-Host "`n[3/5] Cai dat thu vien phu thuoc..." -ForegroundColor Yellow
 try {
-    & $venvPip install --upgrade pip --quiet
-    & $venvPip install -r "$PSScriptRoot\requirements-local.txt"
+    & $venvPython -m pip install --upgrade pip --quiet
+    & $venvPython -m pip install -r "$PSScriptRoot\requirements-local.txt"
     if ($LASTEXITCODE -ne 0) {
         throw "pip install failed with exit code $LASTEXITCODE"
     }
@@ -109,9 +109,20 @@ print('FFmpeg da san sang!')
     }
 }
 
-# 5. Kiem tra Ollama neu khong phai SportsOnly
+# 5. Kiem tra Whisper model & Ollama neu khong phai SportsOnly
 if (-not $SportsOnly) {
-    Write-Host "`n[5/5] Kiem tra Ollama (cho che do Offline Speech)..." -ForegroundColor Yellow
+    Write-Host "`n[5/6] Kiem tra model Whisper (phien am offline)..." -ForegroundColor Yellow
+    try {
+        & $venvPython -c "from shorts_generator.local.model_downloader import ensure_whisper_model; ensure_whisper_model('base')"
+        if ($LASTEXITCODE -ne 0) {
+            throw "Whisper model download failed with exit code $LASTEXITCODE"
+        }
+        Write-Host "  -> Whisper base model da san sang!" -ForegroundColor Green
+    } catch {
+        Write-Host "[Canh bao] Khong the tai hoac xac thuc Whisper base model: $_" -ForegroundColor Yellow
+    }
+
+    Write-Host "`n[6/6] Kiem tra Ollama (cho che do Offline Speech)..." -ForegroundColor Yellow
     $ollamaExe = "ollama"
     if (-not (Get-Command ollama -ErrorAction SilentlyContinue)) {
         if (-not (Test-Path "$PSScriptRoot\ollama_bin\ollama.exe")) {
@@ -139,7 +150,7 @@ print('Giai nen Ollama hoan tat!')
         }
     }
 
-    if (Get-Command ollama -ErrorAction SilentlyContinue -or (Test-Path "$PSScriptRoot\ollama_bin\ollama.exe")) {
+    if ((Get-Command ollama -ErrorAction SilentlyContinue) -or (Test-Path "$PSScriptRoot\ollama_bin\ollama.exe")) {
         $ollamaHealthy = $false
         try {
             $null = Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/tags" -Method Get -TimeoutSec 2 -ErrorAction Stop
@@ -149,7 +160,7 @@ print('Giai nen Ollama hoan tat!')
         }
         if (-not $ollamaHealthy) {
             Start-Process -FilePath $ollamaExe -ArgumentList "serve" -WindowStyle Hidden
-            $timeout = 10
+            $timeout = 15
             $elapsed = 0
             while ($elapsed -lt $timeout) {
                 Start-Sleep -Seconds 1
@@ -167,14 +178,14 @@ print('Giai nen Ollama hoan tat!')
             Write-Host "  -> Dang kiem tra model qwen2.5:3b trong Ollama..." -ForegroundColor Cyan
             & $ollamaExe pull qwen2.5:3b
         } else {
-            Write-Host "  -> [Luu y] Ollama server chua khoi dong kip. Ban co the chay 'ollama pull qwen2.5:3b' sau." -ForegroundColor Yellow
+            Write-Host "  -> [Canh bao] Ollama server chua khoi dong kip." -ForegroundColor Yellow
         }
     }
 } else {
-    Write-Host "`n[5/5] Bo qua Ollama vi da chon che do SportsOnly." -ForegroundColor Green
+    Write-Host "`n[5/6] Bo qua Whisper va Ollama vi da chon che do SportsOnly." -ForegroundColor Green
 }
 
-# 6. Tao file .env neu chua co
+# Tao file .env neu chua co
 if (-not (Test-Path "$PSScriptRoot\.env")) {
     Copy-Item "$PSScriptRoot\.env.example" "$PSScriptRoot\.env"
     Write-Host "  -> Da tao file .env mac dinh!" -ForegroundColor Green
@@ -182,7 +193,7 @@ if (-not (Test-Path "$PSScriptRoot\.env")) {
 
 New-Item -ItemType Directory -Force -Path "$PSScriptRoot\input", "$PSScriptRoot\output" | Out-Null
 
-# 7. Final Verification Checks
+# Final Verification Checks
 Write-Host "`nKiem tra tong the sau cai dat..." -ForegroundColor Yellow
 $allChecksPassed = $true
 
@@ -198,6 +209,47 @@ if (-not $hasFfmpeg) {
     $allChecksPassed = $false
 } else {
     Write-Host "[v] FFmpeg san sang." -ForegroundColor Green
+}
+
+if (-not $SportsOnly) {
+    # Kiem tra Whisper base model
+    $whisperReady = $false
+    try {
+        & $venvPython -c "from shorts_generator.local.model_downloader import ensure_whisper_model; ensure_whisper_model('base')"
+        if ($LASTEXITCODE -eq 0) { $whisperReady = $true }
+    } catch {
+        $whisperReady = $false
+    }
+    if ($whisperReady) {
+        Write-Host "[v] Whisper base model san sang." -ForegroundColor Green
+    } else {
+        Write-Host "[X] Whisper base model chua san sang hoac bi loi hash!" -ForegroundColor Red
+        $allChecksPassed = $false
+    }
+
+    # Kiem tra Ollama daemon & model qwen2.5:3b
+    $ollamaModelReady = $false
+    try {
+        $tags = Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/tags" -Method Get -TimeoutSec 3 -ErrorAction Stop
+        if ($tags -and $tags.models) {
+            foreach ($m in $tags.models) {
+                if ($m.name -match "qwen2\.5:3b") {
+                    $ollamaModelReady = $true
+                    break
+                }
+            }
+        }
+    } catch {
+        $ollamaModelReady = $false
+    }
+
+    if ($ollamaModelReady) {
+        Write-Host "[v] Ollama & model qwen2.5:3b san sang." -ForegroundColor Green
+    } else {
+        Write-Host "[X] Ollama chua chay hoac chua co model qwen2.5:3b!" -ForegroundColor Red
+        Write-Host "    Huong dan: Khoi dong Ollama va chay 'ollama pull qwen2.5:3b'" -ForegroundColor Yellow
+        $allChecksPassed = $false
+    }
 }
 
 if ($allChecksPassed) {
