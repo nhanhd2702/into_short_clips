@@ -12,4 +12,5 @@ ollama_bin/
 *.log
 *.jpg
 *.png
+test_assets/
 .DS_Store
